@@ -119,6 +119,23 @@ test("a project with nothing discoverable still has a root route", () => {
   assert.deepEqual(routes, [{ path: "/", dynamic: false, family: "/", layout: null, file: null }]);
 });
 
+test("static: a declared '/x.html' is the same route as the discovered '/x'", () => {
+  const dir = tree({
+    "index.html": "",
+    "api/static/dashboard.html": "",
+    "templates/email/match.html": "",
+  });
+  const routes = routesFor({
+    key: key("declared-html"),
+    dir,
+    kind: "static",
+    routes: ["/api/static/dashboard.html", "/templates/email/match.html", "/index.html"],
+  });
+  const paths = routes.map((r) => r.path);
+  assert.deepEqual(paths, ["/api/static/dashboard", "/templates/email/match", "/"], "declared order, clean spelling, no duplicates");
+  assert.equal(posix(routes[0].file), "api/static/dashboard.html", "the declared route still finds its file");
+});
+
 test("static: .html files become clean routes, index folds, the root leads, families are directories", () => {
   const dir = tree({
     "index.html": "",

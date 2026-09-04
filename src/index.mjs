@@ -10,6 +10,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildCatalogue, resolveInspectComment } from "./catalogue.mjs";
 import { createHubServer } from "./hub.mjs";
+import { Handover } from "./handover.mjs";
 import { Progress } from "./progress.mjs";
 import { createProjectServer } from "./proxy.mjs";
 import { routesFor } from "./routes.mjs";
@@ -144,6 +145,27 @@ async function ensureBridge(bridge, inspectCommentPath, stateDir, log) {
   return handle;
 }
 
+/**
+ * Every review is appended to .lightbox/reviews/<key>/inbox.md before it is
+ * forwarded. The bridge keeps only its last twenty; a long sitting across many
+ * projects would otherwise lose the early ones before anyone read them.
+ */
+function archiveReview(stateDir) {
+  return (project, payload) => {
+    if (typeof payload.markdown !== "string" || !payload.markdown.trim()) return;
+    const dir = path.join(stateDir, "reviews", project.key);
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      fs.appendFileSync(
+        path.join(dir, "inbox.md"),
+        `\n<!-- ${new Date().toISOString()} ${payload.page || ""} -->\n${payload.markdown.trim()}\n`
+      );
+    } catch {
+      /* the forward still happens; the archive is a safety net, not the path */
+    }
+  };
+}
+
 export async function serve(config, cwd = process.cwd(), opts = {}) {
   const log = opts.log || ((...a) => console.log(...a));
   const stateDir = path.join(cwd, ".lightbox");
@@ -152,6 +174,7 @@ export async function serve(config, cwd = process.cwd(), opts = {}) {
   const catalogue = buildCatalogue(config);
   const supervisor = new Supervisor({ logDir: path.join(stateDir, "logs") });
   const progress = new Progress(path.join(stateDir, "progress.json"));
+  const handover = new Handover(path.join(stateDir, "handover.json"));
   const inspectCommentPath = resolveInspectComment(config, cwd);
   const hubUrl = `http://localhost:${config.hubPort}/`;
   const overlayPath = path.join(HERE, "overlay.js");
@@ -180,7 +203,7 @@ export async function serve(config, cwd = process.cwd(), opts = {}) {
       bridge: config.bridge,
       overlayPath,
       inspectCommentPath,
-      onReview: opts.onReview,
+      onReview: opts.onReview || archiveReview(stateDir),
     };
     const server = createProjectServer(ctx);
     const r = await listen(server, project.port);
@@ -195,6 +218,7 @@ export async function serve(config, cwd = process.cwd(), opts = {}) {
     catalogue,
     supervisor,
     progress,
+    handover,
     hubUrl,
     bridge: config.bridge,
     inspectCommentPath,
@@ -235,13 +259,14 @@ export async function serve(config, cwd = process.cwd(), opts = {}) {
 
   const shutdown = async () => {
     progress.flush();
+    handover.flush();
     await supervisor.stopAll(catalogue.projects).catch(() => {});
     bridgeChild?.kill();
     for (const s of servers) s.server.close();
     hub.close();
   };
 
-  return { catalogue, supervisor, progress, servers, hub, shutdown, skipped, inspectCommentPath };
+  return { catalogue, supervisor, progress, handover, servers, hub, shutdown, skipped, inspectCommentPath };
 }
 
 export { buildCatalogue, routesFor };

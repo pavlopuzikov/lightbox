@@ -85,6 +85,14 @@ function segmentsToRoute(rel) {
   return "/" + out.join("/");
 }
 
+/** "/docs/index.html" and "/about.html" as the proxy would spell them: "/docs" and "/about". */
+function cleanRoute(route) {
+  let r = String(route);
+  if (/\.html?$/i.test(r)) r = r.replace(/\.html?$/i, "");
+  if (/\/index$/i.test(r)) r = r.replace(/\/index$/i, "") || "/";
+  return r;
+}
+
 function fillParams(route, params) {
   if (!params) return route;
   return route.replace(/\[{1,2}(\.{3})?([^\]]+)\]{1,2}/g, (m, spread, name) => {
@@ -219,7 +227,10 @@ export function routesFor(project) {
     meta = new Map();
   }
 
-  const declared = project.routes || [];
+  // A declared "/about.html" and a discovered "/about" are the same page. The
+  // clean spelling wins, since that is what the proxy serves and what discovery
+  // would have produced on its own.
+  const declared = (project.routes || []).map(cleanRoute);
   const merged = order([...meta.keys()]);
   const seen = new Set();
   const list = [];

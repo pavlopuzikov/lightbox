@@ -94,7 +94,10 @@ function injectionFor(ctx) {
   );
 }
 
-function injectHtml(html, ctx) {
+function injectHtml(html, ctx, req) {
+  // A sweep (scripts/sweep.mjs) measures the page, not the walker, and asks
+  // for the document exactly as the project serves it.
+  if (req && req.headers["x-lightbox-bare"]) return html;
   if (html.includes("data-lightbox-config")) return html;
   const tag = injectionFor(ctx);
   const head = html.search(/<head[^>]*>/i);
@@ -166,7 +169,7 @@ function serveStatic(req, res, ctx) {
     const clean = full + ".html";
     if (!path.extname(full) && fs.existsSync(clean)) return sendFile(req, res, clean, ctx);
     res.writeHead(404, { "content-type": "text/html; charset=utf-8" });
-    res.end(injectHtml(notFoundPage(project, rel), ctx));
+    res.end(injectHtml(notFoundPage(project, rel), ctx, req));
     return;
   }
 
@@ -178,7 +181,7 @@ function serveStatic(req, res, ctx) {
       res.end();
       return;
     }
-    const body = injectHtml(autoIndex(full, rel, project), ctx);
+    const body = injectHtml(autoIndex(full, rel, project), ctx, req);
     res.writeHead(200, {
       "content-type": "text/html; charset=utf-8",
       "content-length": Buffer.byteLength(body),
@@ -216,7 +219,7 @@ function sendFile(req, res, file, ctx) {
       res.end();
       return;
     }
-    const body = injectHtml(html, ctx);
+    const body = injectHtml(html, ctx, req);
     res.writeHead(200, {
       "content-type": type,
       "content-length": Buffer.byteLength(body),
@@ -304,7 +307,7 @@ function proxyUpstream(req, res, ctx) {
       const chunks = [];
       ur.on("data", (c) => chunks.push(c));
       ur.on("end", () => {
-        const body = Buffer.from(injectHtml(Buffer.concat(chunks).toString("utf8"), ctx), "utf8");
+        const body = Buffer.from(injectHtml(Buffer.concat(chunks).toString("utf8"), ctx, req), "utf8");
         delete out["content-length"];
         delete out["content-encoding"];
         delete out["transfer-encoding"];

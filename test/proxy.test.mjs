@@ -68,6 +68,19 @@ test("HTML gets the config and the overlay right after <head>, before the page's
   }
 });
 
+test("x-lightbox-bare returns the document exactly as the project serves it", async () => {
+  const { port, close } = await serveStaticFixture({ "index.html": PAGE });
+  try {
+    const bare = await get(port, "/", { "x-lightbox-bare": "1" });
+    assert.equal(bare.status, 200);
+    assert.equal(bare.body.toString(), PAGE, "no config, no overlay, byte for byte");
+    const dressed = await get(port, "/");
+    assert.ok(dressed.body.toString().includes("data-lightbox-config"), "the header is opt-in per request");
+  } finally {
+    await close();
+  }
+});
+
 test("Range requests: 206 with the right slice, suffix ranges, and 416 when unsatisfiable", async () => {
   const { port, close } = await serveStaticFixture({ "media.bin": "0123456789" });
   try {

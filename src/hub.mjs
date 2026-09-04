@@ -14,6 +14,7 @@
 
 import fs from "node:fs";
 import http from "node:http";
+import { summarise } from "./handover.mjs";
 import { familiesOf, routesFor } from "./routes.mjs";
 
 const esc = (s) =>
@@ -68,6 +69,8 @@ background:linear-gradient(var(--teal),var(--teal)) 0 0/50% 100% no-repeat}
 .name{font:400 17px/1.25 var(--serif);color:var(--ink);margin:0}
 .sys{color:var(--muted);font-size:12px;margin-top:3px}
 .note{margin:2px 0 0;color:var(--ink-2);font-size:13px;line-height:1.45}
+.hand{margin:4px 0 0;font:11.5px/1.7 var(--mono);color:var(--muted)}.hand:empty{display:none}
+.acts button.text.ok{color:var(--muted);cursor:default}
 .err{margin:6px 0 0;color:var(--fail);font-size:12.5px;white-space:pre-wrap}
 .err:empty{display:none}
 .num{font:12.5px/1.6 var(--mono);color:var(--ink-2);font-variant-numeric:tabular-nums;margin-top:3px}
@@ -108,7 +111,13 @@ const STATE_LABEL = {
   stopped: "",
 };
 
-function row(p, st, routes, done) {
+/** One muted line under the notes: the audit branch, its sweep, what waits on a decision. */
+function handLine(h) {
+  if (!h) return "";
+  return [h.note, ...summarise(h)].filter(Boolean).join(" · ");
+}
+
+function row(p, st, routes, done, hand) {
   const missing = !p.exists;
   const key = esc(p.key);
   const pct = routes.length ? Math.round((done / routes.length) * 100) : 0;
@@ -128,6 +137,7 @@ function row(p, st, routes, done) {
     ${p.note ? `<p class="note">${esc(p.note)}</p>` : ""}
     ${missing ? `<p class="err">Directory not found: ${esc(p.dir)}</p>` : ""}
     <p class="err" data-err="${key}">${esc(st.error || "")}</p>
+    <p class="hand" data-hand="${key}">${esc(handLine(hand))}</p>
   </div>
   <div class="num"><b data-done="${key}">${done}</b> <span class="m">of</span> ${routes.length} <span class="m">pages</span>${
     fams.length > 1 ? `<br>${fams.length} <span class="m">families</span>` : ""
@@ -151,6 +161,9 @@ function row(p, st, routes, done) {
     }
     <button class="text quiet" data-toggle="pages">${routes.length} pages</button>
     ${node ? `<button class="text quiet" data-toggle="log">log</button>` : ""}
+    <button class="text${hand?.approved ? " ok" : ""}" data-act="approve" data-key="${key}"${hand ? "" : " hidden"}${
+      hand?.approved ? " disabled" : ""
+    }>${hand?.approved ? "Approved " + esc(String(hand.approvedAt).slice(0, 10)) : "Approve"}</button>
   </div>
   <span class="prog"><i style="width:${pct}%" data-prog="${key}"></i></span>
   <div class="more pages"><ul class="routes">${fams
@@ -175,7 +188,7 @@ function row(p, st, routes, done) {
 }
 
 function page(ctx) {
-  const { catalogue, supervisor, progress } = ctx;
+  const { catalogue, supervisor, progress, handover } = ctx;
   const sections = catalogue.groups
     .map((g) => {
       const items = catalogue.projects.filter((p) => p.group === g.id);
@@ -186,7 +199,7 @@ function page(ctx) {
             ...r,
             reviewed: progress.get(p.key).includes(r.path),
           }));
-          return row(p, supervisor.state(p), routes, progress.countFor(p.key));
+          return row(p, supervisor.state(p), routes, progress.countFor(p.key), handover.get(p.key));
         })
         .join("");
       return `<section><h2>${esc(g.title)}</h2>${
@@ -224,7 +237,7 @@ document.addEventListener('click',function(e){
   if(t){t.closest('.row').classList.toggle('open-'+t.dataset.toggle);return}
   var b=e.target.closest('button[data-act]');
   if(!b)return;
-  b.disabled=true;b.textContent=b.dataset.act==='install'?'installing…':b.dataset.act+'ping…';
+  b.disabled=true;b.textContent=b.dataset.act==='install'?'installing…':b.dataset.act==='approve'?'approving…':b.dataset.act+'ping…';
   act(b.dataset.key,b.dataset.act);
 });
 document.getElementById('stopall').addEventListener('click',function(){
@@ -257,6 +270,10 @@ async function refresh(){
       if(stop){stop.hidden=!running;if(!running){stop.disabled=false;stop.textContent='stop'}}
       var inst=row.querySelector('button[data-act="install"]');
       if(inst&&st.hasModules){inst.hidden=true}
+      var hp=q('[data-hand="'+k+'"]');
+      if(hp&&typeof st.handoverLine==='string')hp.textContent=st.handoverLine;
+      var ap=row.querySelector('button[data-act="approve"]');
+      if(ap){var h=st.handover;ap.hidden=!h;if(h){ap.disabled=!!h.approved;ap.classList.toggle('ok',!!h.approved);ap.textContent=h.approved?'Approved '+String(h.approvedAt).slice(0,10):'Approve'}}
     }
   }catch(e){}
 }
@@ -335,7 +352,7 @@ function bridgeStatus(bridge) {
 }
 
 export function createHubServer(ctx) {
-  const { catalogue, supervisor, progress } = ctx;
+  const { catalogue, supervisor, progress, handover } = ctx;
   const byKey = new Map(catalogue.projects.map((p) => [p.key, p]));
 
   return http.createServer(async (req, res) => {
@@ -379,6 +396,8 @@ export function createHubServer(ctx) {
           log: project.kind === "node" ? supervisor.tail(project.key, 40) : "",
           done: progress.countFor(project.key),
           hasModules: project.kind !== "node" || !!project.hasModules,
+          handover: handover.get(project.key),
+          handoverLine: handLine(handover.get(project.key)),
         };
       }
       const health = await bridgeStatus(ctx.bridge);
@@ -394,6 +413,10 @@ export function createHubServer(ctx) {
       );
     }
 
+    if (p === "/api/handover") {
+      return send(200, "application/json", JSON.stringify(handover.all()));
+    }
+
     if (p.startsWith("/api/state/")) {
       const project = byKey.get(p.slice("/api/state/".length));
       if (!project) return send(404, "application/json", '{"error":"no such project"}');
@@ -405,7 +428,7 @@ export function createHubServer(ctx) {
     }
 
     if (req.method === "POST") {
-      const m = /^\/api\/(start|stop|install|stopall)(?:\/(.+))?$/.exec(p);
+      const m = /^\/api\/(start|stop|install|stopall|approve|unapprove)(?:\/(.+))?$/.exec(p);
       if (m) {
         const [, action, key] = m;
         if (action === "stopall") {
@@ -414,6 +437,13 @@ export function createHubServer(ctx) {
         }
         const project = byKey.get(key);
         if (!project) return send(404, "application/json", '{"error":"no such project"}');
+        if (action === "approve" || action === "unapprove") {
+          // The only signal the push step reads. Flushed at once, not on the
+          // timer, so a coding session polling the file sees it immediately.
+          const entry = action === "approve" ? handover.approve(project.key) : handover.unapprove(project.key);
+          handover.flush();
+          return send(200, "application/json", JSON.stringify(entry));
+        }
         if (action === "start") supervisor.start(project).catch(() => {});
         if (action === "stop") await supervisor.stop(project).catch(() => {});
         if (action === "install")

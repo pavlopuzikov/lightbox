@@ -60,6 +60,26 @@ inspector, and `serve` says so once at start-up.
 | `lightbox list` | What the config resolves to: port, runner, page count, and which projects still need `npm install` |
 | `lightbox serve` | The hub and every review port. Dev servers start when a project is opened |
 
+### Scripts for the audit loop
+
+These live in `scripts/` and run with plain `node`. They keep the
+zero-dependency promise: the sweep borrows Playwright and axe-core from a
+directory you point it at (`--playwright <dir>`, or `LIGHTBOX_PLAYWRIGHT`),
+typically some other project's `node_modules`.
+
+| Script | Does |
+| --- | --- |
+| `scripts/sweep.mjs --key <key>` | Loads every route at 390, 768 and 1440 through the review port with the walker left out (the proxy honours an `x-lightbox-bare` request header) and records status, console errors, failed requests, horizontal overflow with its culprits, axe WCAG AA violations, `lang`/title/description/viewport/`h1`, first Tab stop and its focus ring, declared motion against `prefers-reduced-motion`, and a full-page screenshot with its hash. Writes `.lightbox/audit/<key>.json` and `.lightbox/shots/<key>/before/`. `--label after` writes the second set |
+| `scripts/sweep.mjs diff before.json after.json` | Check by check, route by route: what got worse, what got better, which screenshots changed. Exits 1 on anything worse |
+| `scripts/sweep.mjs summary *.json` | One markdown table across projects |
+| `scripts/sweep.mjs login --key <key>` | Opens a headed browser on the project's login page, waits for you to sign in, and saves the storage state to reuse with `--storage-state` |
+| `scripts/handover.mjs` | Refreshes `.lightbox/handover.json` from git (audit branch, commits above its base) and the sweep totals, then writes `.lightbox/HANDOVER.md`. Hand-written fields survive: notes, proposals, Lighthouse numbers, approval |
+| `scripts/reviews.mjs drain` | Copies every review the bridge holds into `.lightbox/reviews/<key>/` with its screenshots. The bridge keeps only its last twenty, so run this at the start of every coding batch |
+
+The hub shows the handover line under each project (branch, commit count,
+sweep totals, proposals waiting) and an **Approve** action. `approved: true` in
+`handover.json` is the one signal a push step is meant to read.
+
 ## Config
 
 `lightbox.config.json` (or `.mjs`) sits in the directory you run from.
@@ -133,6 +153,10 @@ it is gitignored:
 | --- | --- |
 | `progress.json` | Which routes are marked done, per project |
 | `reviews/reviews.json` | Reviews received by the bridge, plus their screenshots |
+| `reviews/<key>/inbox.md` | Every review for that project, appended as it arrives, before the bridge's twenty-review cap can lose it |
+| `reviews/<key>/review-<id>.md` | What `reviews.mjs drain` copied out, with the screenshots beside it; `reviews/drained.json` lists the ids taken |
+| `audit/<key>.json`, `shots/<key>/` | The sweep's measurements and full-page screenshots |
+| `handover.json`, `HANDOVER.md` | Per project: base, audit branch, commits, sweep totals, proposals, approval |
 | `logs/<key>.log` | Each dev server's output |
 | `logs/bridge.log` | The MCP bridge's output, one section per start |
 
