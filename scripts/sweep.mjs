@@ -135,7 +135,7 @@ const NOISE = [
   /\[HMR\]/,
   /\[Fast Refresh\]/,
   /Download the React DevTools/,
-  /webpack-hmr|_next\/webpack-hmr|turbopack-hmr/,
+  /webpack-hmr|_next\/webpack-hmr|turbopack-hmr|_next\/hmr\b/,
   /favicon\.ico/,
 ];
 const isNoise = (s) => NOISE.some((re) => re.test(s));
@@ -375,7 +375,9 @@ export function checksOf(w) {
     ok: w.status > 0 && w.status < 400,
     redirected: !!w.finalUrl,
     consoleErrors: (w.console?.errors?.length || 0) + (w.console?.pageErrors?.length || 0),
-    failedRequests: (w.requests?.failed?.length || 0) + (w.requests?.bad?.length || 0),
+    // A request the browser itself cancelled (navigation, page close, a
+    // superseded prefetch) is not a failure of the page.
+    failedRequests: (w.requests?.failed || []).filter((q) => !/ERR_ABORTED/.test(q.error || "")).length + (w.requests?.bad?.length || 0),
     overflow: !!w.overflow?.over,
     contrast: w.axe?.contrast || 0,
     axeSerious: w.axe?.seriousOrCritical || 0,
