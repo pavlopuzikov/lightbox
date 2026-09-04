@@ -1,0 +1,19 @@
+node_modules/
+*.log
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+.env
+.env.*
+
+# The real catalogue names private and employer-origin repositories and holds
+# absolute paths off one machine. It stays local; the example file is what ships.
+lightbox.config.json
+lightbox.config.mjs
+
+# Per-run state: child process logs, review progress, port assignments.
+.lightbox/

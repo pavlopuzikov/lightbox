@@ -1,0 +1,55 @@
+{
+  "hubPort": 4000,
+  "reviewPortBase": 4001,
+  "upstreamPortBase": 3100,
+  "bridge": "http://127.0.0.1:7391",
+  "inspectComment": "auto",
+
+  "_comment_scan": "Point at a directory and lightbox works out what is in it: package.json decides the runner, an .html file makes it a static site, anything else is skipped. depth 2 also looks one level into apps/ and packages/ for monorepos.",
+  "scan": [
+    { "dir": "C:/Users/you/projects", "depth": 2, "group": "projects", "exclude": ["archive"] }
+  ],
+
+  "_comment_projects": "Explicit entries win over anything scanned with the same key. Use them to name a project properly, group it, pin its review port, list the routes that should lead, or fill in dynamic segments.",
+  "_comment_kind": "Set \"kind\": \"static\" on a directory that carries a package.json but is really plain HTML, so lightbox serves the files instead of trying to start a dev server.",
+  "_comment_command": "Set \"command\" when the runner is not next, vite, astro, nuxt, remix or cra: an argv array (or one string) with {port} substituted. The first word is resolved from node_modules/.bin.",
+  "projects": [
+    {
+      "key": "marketing",
+      "name": "Marketing site",
+      "system": "Paper",
+      "note": "The one customers actually see. Check the pricing table at 380px.",
+      "group": "live",
+      "dir": "C:/Users/you/projects/marketing",
+      "port": 4001,
+      "routes": ["/", "/pricing", "/about"]
+    },
+    {
+      "key": "app",
+      "name": "Product app",
+      "group": "live",
+      "dir": "C:/Users/you/projects/app",
+      "params": { "workspace": "demo", "id": "1" }
+    },
+    {
+      "key": "storybook",
+      "name": "Component library",
+      "group": "live",
+      "dir": "C:/Users/you/projects/ui",
+      "command": ["storybook", "dev", "-p", "{port}", "--no-open"],
+      "routes": ["/"]
+    },
+    {
+      "key": "mockups",
+      "name": "Static mockups",
+      "group": "archive",
+      "dir": "C:/Users/you/projects/mockups"
+    }
+  ],
+
+  "_comment_groups": "Ordering and headings on the hub. Any group referenced by a project but not listed here is appended with its id as the title.",
+  "groups": [
+    { "id": "live", "title": "Live", "blurb": "Shipping today." },
+    { "id": "archive", "title": "Archive", "blurb": "Kept for the visual record." }
+  ]
+}

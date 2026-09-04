@@ -1,0 +1,64 @@
+{
+  "name": "@pavlopuzikov/lightbox",
+  "version": "0.1.0",
+  "description": "Run every front end you have ever built, all at once, each one carrying the same review overlay. Walks the routes, remembers what you have seen, and hands the notes to a coding agent.",
+  "keywords": [
+    "design-review",
+    "dev-server",
+    "reverse-proxy",
+    "supervisor",
+    "monorepo",
+    "portfolio",
+    "nextjs",
+    "vite",
+    "static-site",
+    "annotate",
+    "feedback",
+    "ai-agent",
+    "mcp"
+  ],
+  "license": "MIT",
+  "author": "Pavlo Puzikov (https://github.com/pavlopuzikov)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pavlopuzikov/lightbox.git"
+  },
+  "homepage": "https://github.com/pavlopuzikov/lightbox#readme",
+  "bugs": "https://github.com/pavlopuzikov/lightbox/issues",
+  "type": "module",
+  "main": "./src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "lightbox.config.example.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "lightbox": "./bin/lightbox.mjs"
+  },
+  "scripts": {
+    "start": "node bin/lightbox.mjs serve",
+    "init": "node bin/lightbox.mjs init",
+    "list": "node bin/lightbox.mjs list",
+    "check": "node scripts/check.mjs",
+    "test": "node --test"
+  },
+  "peerDependenciesMeta": {
+    "inspect-comment": {
+      "optional": true
+    }
+  },
+  "_comment_dependencies": "There are none, and that is a constraint rather than an accident. lightbox runs from a clone with nothing installed, which is the whole point of a tool whose job is to boot other people's projects. inspect-comment is an optional peer: found if installed, skipped with a warning if not.",
+  "_comment_check": "scripts/check.mjs fails the build if package.json grows a `dependencies` block or src/ grows a bare import specifier.",
+  "publishConfig": {
+    "access": "public"
+  }
+}
