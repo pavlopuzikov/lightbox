@@ -646,12 +646,15 @@ async function login() {
 
 /* ------------------------------------------------------------------ */
 
-const main = { run, diff, summary, login }[sub];
-if (!main) {
-  console.error(`unknown subcommand "${sub}"`);
-  process.exit(2);
+/* Only run as a CLI; `checksOf` is importable without side effects. */
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
+  const main = { run, diff, summary, login }[sub];
+  if (!main) {
+    console.error(`unknown subcommand "${sub}"`);
+    process.exit(2);
+  }
+  main().catch((e) => {
+    console.error(e.stack || e.message);
+    process.exit(1);
+  });
 }
-main().catch((e) => {
-  console.error(e.stack || e.message);
-  process.exit(1);
-});
