@@ -374,7 +374,9 @@ export function checksOf(w) {
     status: w.status,
     ok: w.status > 0 && w.status < 400,
     redirected: !!w.finalUrl,
-    consoleErrors: (w.console?.errors?.length || 0) + (w.console?.pageErrors?.length || 0),
+    // Filtered again here so a sweep recorded before a noise pattern was
+    // added reads the same as one recorded after it.
+    consoleErrors: (w.console?.errors || []).filter((e) => !isNoise(e.text || "")).length + (w.console?.pageErrors || []).filter((e) => !isNoise(String(e))).length,
     // A request the browser itself cancelled (navigation, page close, a
     // superseded prefetch) is not a failure of the page.
     failedRequests: (w.requests?.failed || []).filter((q) => !/ERR_ABORTED/.test(q.error || "")).length + (w.requests?.bad?.length || 0),
