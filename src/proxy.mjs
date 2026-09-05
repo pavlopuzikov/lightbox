@@ -69,7 +69,7 @@ const esc = (s) =>
  * ------------------------------------------------------------------ */
 
 /**
- * The overlay goes into <head>, not before </body>.
+ * The overlay goes at the end of <head>, not before </body>.
  *
  * React hydrates the whole document in the App Router, and an extra node at the
  * end of <body> is the one place that reliably produces a hydration mismatch.
@@ -100,6 +100,12 @@ function injectHtml(html, ctx, req) {
   if (req && req.headers["x-lightbox-bare"]) return html;
   if (html.includes("data-lightbox-config")) return html;
   const tag = injectionFor(ctx);
+  // At the end of <head>, not the start: the App Router hydrates <head> too,
+  // and a foreign node placed ahead of React's own children shifts every one
+  // of them, which surfaces as an attribute mismatch on the first (seen on
+  // pavlopuzikov.com, 2026-09-05). Trailing nodes are absorbed.
+  const headClose = html.search(/<[/]head>/i);
+  if (headClose !== -1) return html.slice(0, headClose) + tag + html.slice(headClose);
   const head = html.search(/<head[^>]*>/i);
   if (head !== -1) {
     const end = html.indexOf(">", head) + 1;

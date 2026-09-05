@@ -50,14 +50,18 @@ const PAGE =
   "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Fixture</title></head>" +
   "<body><script>window.first = 1</script><p>hello</p></body></html>";
 
-test("HTML gets the config and the overlay right after <head>, before the page's own scripts", async () => {
+test("HTML gets the config and the overlay at the end of <head>, before the page's own scripts", async () => {
   const { port, project, close } = await serveStaticFixture({ "index.html": PAGE });
   try {
     const r = await get(port, "/");
     assert.equal(r.status, 200);
     const html = r.body.toString();
-    const afterHead = html.indexOf("<head>") + "<head>".length;
-    assert.equal(html.indexOf("<script data-lightbox-config>"), afterHead);
+    // After the page's own head children (the App Router hydrates <head>, and
+    // a foreign node ahead of React's children reads as a mismatch), but still
+    // inside <head> so the config exists before any body script runs.
+    const overlayTag = '<script src="/__lb/overlay.js" defer data-lightbox></script>';
+    assert.equal(html.indexOf(overlayTag) + overlayTag.length, html.indexOf("</head>"));
+    assert.ok(html.indexOf("<title>Fixture</title>") < html.indexOf("<script data-lightbox-config>"));
     assert.ok(html.includes(`window.__LIGHTBOX={"key":"${project.key}"`));
     assert.ok(html.includes('<script src="/__lb/overlay.js" defer data-lightbox></script>'));
     assert.ok(
