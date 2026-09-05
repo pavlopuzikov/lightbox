@@ -176,7 +176,7 @@ function row(p, st, routes, done, hand) {
             (r) =>
               `<li><span class="d${r.reviewed ? " on" : ""}"></span><a href="http://localhost:${
                 p.port
-              }${esc(r.path)}" target="_blank" rel="noreferrer"${
+              }${esc(r.path)}"${
                 r.file ? ` title="${esc(r.file)}"` : ""
               }>${esc(r.path)}</a>${r.dynamic ? '<span class="dyn">dynamic</span>' : ""}</li>`
           )
