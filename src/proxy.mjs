@@ -278,9 +278,29 @@ function sendFile(req, res, file, ctx) {
  * Upstream proxying
  * ------------------------------------------------------------------ */
 
+/**
+ * The headers a request is forwarded upstream with. Next 16's dev server
+ * refuses its own /_next/* resources and the HMR socket when the Origin or
+ * Referer names a host it does not allow, and "127.0.0.1" is not "localhost"
+ * to it: the page renders but never hydrates, and hot reload never connects.
+ * The upstream is always a local dev server, so every request is rewritten
+ * to look as if the browser were at localhost:<upstream>, whatever hostname
+ * the review port was opened on. Host follows, so a server action's
+ * origin-against-host check still agrees.
+ */
+export function upstreamHeaders(reqHeaders, project) {
+  const headers = { ...reqHeaders, host: `localhost:${project.upstream}` };
+  const self = new RegExp(`^https?://[^/]+:${project.port}(?=/|$)`, "i");
+  for (const name of ["origin", "referer"]) {
+    const v = headers[name];
+    if (typeof v === "string") headers[name] = v.replace(self, `http://localhost:${project.upstream}`);
+  }
+  return headers;
+}
+
 function proxyUpstream(req, res, ctx) {
   const project = ctx.project;
-  const headers = { ...req.headers, host: `127.0.0.1:${project.upstream}` };
+  const headers = upstreamHeaders(req.headers, project);
   delete headers["accept-encoding"];
 
   const up = http.request(
@@ -338,7 +358,7 @@ function proxyUpgrade(req, socket, head, ctx) {
     port: project.upstream,
     path: req.url,
     method: "GET",
-    headers: { ...req.headers, host: `127.0.0.1:${project.upstream}` },
+    headers: upstreamHeaders(req.headers, project),
   });
 
   up.on("upgrade", (ures, usocket, uhead) => {

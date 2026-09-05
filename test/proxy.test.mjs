@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createProjectServer } from "../src/proxy.mjs";
+import { createProjectServer, upstreamHeaders } from "../src/proxy.mjs";
 import { Progress } from "../src/progress.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -159,4 +159,27 @@ test("static: clean URLs resolve to their .html file and directories to index.ht
   } finally {
     await close();
   }
+});
+
+test("upstream headers make the browser look like localhost:<upstream> to a dev server", () => {
+  const project = { port: 4003, upstream: 3103 };
+  const h = upstreamHeaders(
+    {
+      host: "127.0.0.1:4003",
+      origin: "http://127.0.0.1:4003",
+      referer: "http://127.0.0.1:4003/about?x=1",
+      "sec-fetch-site": "same-origin",
+    },
+    project
+  );
+  assert.equal(h.host, "localhost:3103");
+  assert.equal(h.origin, "http://localhost:3103");
+  assert.equal(h.referer, "http://localhost:3103/about?x=1");
+  assert.equal(h["sec-fetch-site"], "same-origin");
+
+  // A hostname other than 127.0.0.1 on the review port is rewritten too, and
+  // a foreign origin is left alone.
+  assert.equal(upstreamHeaders({ origin: "http://100.99.1.2:4003" }, project).origin, "http://localhost:3103");
+  assert.equal(upstreamHeaders({ origin: "https://example.com" }, project).origin, "https://example.com");
+  assert.equal(upstreamHeaders({ referer: "http://127.0.0.1:40031/x" }, project).referer, "http://127.0.0.1:40031/x");
 });
