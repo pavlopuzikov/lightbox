@@ -298,13 +298,21 @@ export function upstreamHeaders(reqHeaders, project) {
   return headers;
 }
 
+/**
+ * The loopback the dev server actually answers on. The supervisor records it
+ * when the server comes up or is adopted; Vite binds only ::1 on Node 17+.
+ */
+function upstreamHost(ctx) {
+  return ctx.supervisor?.state?.(ctx.project)?.host || "127.0.0.1";
+}
+
 function proxyUpstream(req, res, ctx) {
   const project = ctx.project;
   const headers = upstreamHeaders(req.headers, project);
   delete headers["accept-encoding"];
 
   const up = http.request(
-    { host: "127.0.0.1", port: project.upstream, method: req.method, path: req.url, headers },
+    { host: upstreamHost(ctx), port: project.upstream, method: req.method, path: req.url, headers },
     (ur) => {
       const out = { ...ur.headers };
 
@@ -354,7 +362,7 @@ function proxyUpstream(req, res, ctx) {
 function proxyUpgrade(req, socket, head, ctx) {
   const project = ctx.project;
   const up = http.request({
-    host: "127.0.0.1",
+    host: upstreamHost(ctx),
     port: project.upstream,
     path: req.url,
     method: "GET",

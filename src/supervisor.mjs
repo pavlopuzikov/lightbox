@@ -20,6 +20,9 @@ const WIN = process.platform === "win32";
 const START_TIMEOUT_MS = 180_000;
 const INSTALL_TIMEOUT_MS = 900_000;
 const LOG_TAIL = 400;
+/* Vite 5+ on Node 17+ binds only the IPv6 loopback by default, so a probe of
+   127.0.0.1 alone reports a running server as absent. Try both. */
+const LOOPBACKS = ["127.0.0.1", "::1"];
 
 /** Is anything listening? Resolves, never throws. */
 export function portOpen(port, host = "127.0.0.1", timeout = 800) {
@@ -40,14 +43,22 @@ export function portOpen(port, host = "127.0.0.1", timeout = 800) {
   });
 }
 
+/** The loopback address something answers on, or null. */
+export async function loopbackOpen(port, timeout = 800) {
+  for (const host of LOOPBACKS) if (await portOpen(port, host, timeout)) return host;
+  return null;
+}
+
+/** Resolves to the loopback host the server came up on, or null. */
 async function waitForPort(port, timeoutMs, isDead) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (await portOpen(port)) return true;
+    const host = await loopbackOpen(port);
+    if (host) return host;
     if (isDead && isDead()) return false;
     await new Promise((r) => setTimeout(r, 400));
   }
-  return false;
+  return null;
 }
 
 /**
@@ -163,6 +174,7 @@ export class Supervisor {
       error: e.error,
       startedAt: e.startedAt,
       pid: e.child ? e.child.pid : null,
+      host: e.host || null,
     };
   }
 
@@ -230,10 +242,12 @@ export class Supervisor {
 
     // Something else may already own the port: another session's dev server,
     // or a previous run of this tool. Adopt it rather than fighting it.
-    if (await portOpen(project.upstream)) {
+    const adoptedOn = await loopbackOpen(project.upstream);
+    if (adoptedOn) {
       e.state = "ready";
       e.error = null;
       e.adopted = true;
+      e.host = adoptedOn;
       e.startedAt = Date.now();
       this.log(project.key, `\n=== adopted an existing server on :${project.upstream}\n`);
       return "ready";
@@ -304,6 +318,7 @@ export class Supervisor {
     if (up) {
       e.state = "ready";
       e.error = null;
+      e.host = up;
     } else if (e.state !== "failed") {
       e.state = "failed";
       e.error = `Nothing was listening on :${project.upstream} within ${
@@ -337,10 +352,11 @@ export class Supervisor {
       setTimeout(() => child.kill("SIGKILL"), 4000).unref?.();
     }
     const deadline = Date.now() + 8000;
-    while (Date.now() < deadline && (await portOpen(project.upstream))) {
+    while (Date.now() < deadline && (await loopbackOpen(project.upstream))) {
       await new Promise((r) => setTimeout(r, 300));
     }
     e.child = null;
+    e.host = null;
     e.state = "stopped";
     e.error = null;
   }

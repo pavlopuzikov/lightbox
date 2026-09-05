@@ -4,7 +4,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import http from "node:http";
 import { createProjectServer, upstreamHeaders } from "../src/proxy.mjs";
+import { loopbackOpen, portOpen } from "../src/supervisor.mjs";
 import { Progress } from "../src/progress.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -182,4 +184,46 @@ test("upstream headers make the browser look like localhost:<upstream> to a dev 
   assert.equal(upstreamHeaders({ origin: "http://100.99.1.2:4003" }, project).origin, "http://localhost:3103");
   assert.equal(upstreamHeaders({ origin: "https://example.com" }, project).origin, "https://example.com");
   assert.equal(upstreamHeaders({ referer: "http://127.0.0.1:40031/x" }, project).referer, "http://127.0.0.1:40031/x");
+});
+
+test("a dev server that binds only the IPv6 loopback is detected and proxied", async (t) => {
+  // Vite 5+ on Node 17+ listens on ::1 alone; the old 127.0.0.1-only probe
+  // reported it absent for 180s and the proxy could never reach it.
+  const up = http.createServer((req, res) => res.end("hello from ::1 via " + req.headers.host));
+  try {
+    await new Promise((resolve, reject) => {
+      up.once("error", reject);
+      up.listen(0, "::1", resolve);
+    });
+  } catch {
+    t.skip("no IPv6 loopback on this machine");
+    return;
+  }
+  const upstream = up.address().port;
+  assert.equal(await portOpen(upstream), false, "the IPv4 probe alone misses it");
+  assert.equal(await loopbackOpen(upstream), "::1");
+  assert.equal(await loopbackOpen(1), null, "nothing listens on port 1");
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lightbox-v6-"));
+  const project = { key: "v6", name: "V6", dir, kind: "node", port: 0, upstream };
+  const ctx = {
+    project,
+    progress: new Progress(path.join(dir, ".lightbox", "progress.json")),
+    supervisor: { state: () => ({ state: "ready", host: "::1" }), tail: () => "", start: async () => {} },
+    hubUrl: "http://localhost:4000/",
+    bridge: "http://127.0.0.1:1",
+    overlayPath: path.join(HERE, "..", "src", "overlay.js"),
+    inspectCommentPath: null,
+  };
+  const server = createProjectServer(ctx);
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  project.port = server.address().port;
+  try {
+    const r = await get(project.port, "/");
+    assert.equal(r.status, 200);
+    assert.ok(r.body.toString().startsWith("hello from ::1 via localhost:" + upstream), r.body.toString());
+  } finally {
+    await new Promise((r) => server.close(r));
+    await new Promise((r) => up.close(r));
+  }
 });
