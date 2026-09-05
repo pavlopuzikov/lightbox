@@ -657,7 +657,7 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
     console.error(`unknown subcommand "${sub}"`);
     process.exit(2);
   }
-  main().catch((e) => {
+  Promise.resolve().then(main).catch((e) => {
     console.error(e.stack || e.message);
     process.exit(1);
   });
