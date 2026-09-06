@@ -27,7 +27,9 @@ export const EMPTY = Object.freeze({
   commits: [], // [{ sha, subject }]
   note: "", // "audit only", "archived", "no shared ancestor", ...
   tierC: [], // [{ title, route, width, shot, proposal }]
-  sweep: null, // totals from scripts/sweep.mjs
+  currentBranch: null, // what is actually checked out right now
+  sweep: null, // totals from scripts/sweep.mjs, the before run
+  sweepAfter: null, // the same totals from the after run, once fixes have landed
   lighthouse: null, // { before, after } for the public sites
   approved: false,
   approvedAt: null,
@@ -156,10 +158,17 @@ export function summarise(entry) {
   if (entry.branch) {
     lines.push(`${entry.branch} · ${entry.commits.length} commit${entry.commits.length === 1 ? "" : "s"}`);
   }
-  if (entry.sweep) {
+  if (entry.sweep && entry.sweep.booted === false) {
+    lines.push(`did not boot: ${entry.sweep.error}`);
+  } else if (entry.sweep) {
+    // Show where the numbers ended up, not where they started. Reading the
+    // before figure off a card whose fixes have already landed is how a key
+    // that measures clean keeps looking like outstanding work.
     const s = entry.sweep;
+    const a = entry.sweepAfter && entry.sweepAfter.booted !== false ? entry.sweepAfter : null;
+    const cell = (k) => (a && a[k] !== s[k] ? `${s[k]} to ${a[k]}` : `${(a || s)[k]}`);
     lines.push(
-      `sweep: ${s.routes} routes, ${s.consoleErrors} errors, ${s.overflow} overflow, ${s.contrast} contrast`
+      `sweep: ${s.routes} routes, ${cell("consoleErrors")} errors, ${cell("overflow")} overflow, ${cell("contrast")} contrast`
     );
   }
   if (entry.tierC.length) {

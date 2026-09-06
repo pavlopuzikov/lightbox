@@ -141,3 +141,20 @@ test("a status is kept when the script refreshes the entry, and junk never lands
   assert.equal(h.get("site").status, "", "junk clears the label rather than being stored");
   clearInterval(h.timer);
 });
+
+test("summarise reports where the sweep ended up, not where it started", () => {
+  const before = { routes: 3, consoleErrors: 0, overflow: 1, contrast: 95 };
+  const after = { booted: true, routes: 3, consoleErrors: 0, overflow: 0, contrast: 0 };
+
+  const only = summarise({ ...EMPTY, sweep: before });
+  assert.match(only.join(" "), /3 routes, 0 errors, 1 overflow, 95 contrast/);
+
+  const both = summarise({ ...EMPTY, sweep: before, sweepAfter: after });
+  assert.match(both.join(" "), /1 to 0 overflow/);
+  assert.match(both.join(" "), /95 to 0 contrast/);
+  // Unchanged counters read as one number, not "0 to 0".
+  assert.match(both.join(" "), /, 0 errors,/);
+
+  const dead = summarise({ ...EMPTY, sweep: { booted: false, error: "port in use" } });
+  assert.deepEqual(dead, ["did not boot: port in use"]);
+});
