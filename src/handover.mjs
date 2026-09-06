@@ -33,27 +33,56 @@ export class Handover {
     /** @type {Record<string, object>} */
     this.data = {};
     this.dirty = false;
-    try {
-      const raw = JSON.parse(fs.readFileSync(file, "utf8"));
-      if (raw && typeof raw === "object" && !Array.isArray(raw)) this.data = raw;
-    } catch {
-      this.data = {};
-    }
+    this.mtime = 0;
+    /** @type {Record<string, object>} field changes we have not written yet */
+    this.pending = {};
+    this.load();
     this.timer = setInterval(() => this.flush(), 4000);
     this.timer.unref?.();
   }
 
+  /** Read the file into memory, recording the mtime we read. */
+  load() {
+    try {
+      this.mtime = fs.statSync(this.file).mtimeMs;
+      const raw = JSON.parse(fs.readFileSync(this.file, "utf8"));
+      if (raw && typeof raw === "object" && !Array.isArray(raw)) this.data = raw;
+    } catch {
+      /* no file yet, or a half-written one: keep what we have */
+    }
+  }
+
+  /**
+   * scripts/handover.mjs rewrites this file while the hub is running, so an
+   * in-memory copy loaded at startup goes stale within minutes and the next
+   * flush would write the stale copy back over it. Re-read whenever the file
+   * changed underneath us and we have nothing of our own pending.
+   */
+  refresh() {
+    if (this.dirty) return;
+    let m = 0;
+    try {
+      m = fs.statSync(this.file).mtimeMs;
+    } catch {
+      return;
+    }
+    if (m !== this.mtime) this.load();
+  }
+
   /** The entry for a key, or null when nothing has been recorded. */
   get(key) {
+    this.refresh();
     const e = this.data[key];
     return e ? { ...EMPTY, ...e } : null;
   }
 
   /** Shallow-merge a patch; arrays and objects in the patch replace, not append. */
   set(key, patch) {
+    this.refresh();
     this.data[key] = { ...EMPTY, ...(this.data[key] || {}), ...patch };
+    this.pending[key] = { ...(this.pending[key] || {}), ...patch };
     this.dirty = true;
-    return this.get(key);
+    return { ...EMPTY, ...this.data[key] };
   }
 
   approve(key, when = new Date()) {
@@ -65,19 +94,43 @@ export class Handover {
   }
 
   all() {
+    this.refresh();
     const out = {};
-    for (const key of Object.keys(this.data)) out[key] = this.get(key);
+    for (const key of Object.keys(this.data)) out[key] = { ...EMPTY, ...this.data[key] };
     return out;
   }
 
+  /**
+   * Apply only the fields we actually changed to whatever is on disk now,
+   * rather than replacing the file with our copy of it. The hub changes
+   * approved and approvedAt; every other field belongs to
+   * scripts/handover.mjs, which rewrites this file while the hub is running.
+   */
   flush() {
     if (!this.dirty) return;
+    const pending = this.pending;
+    this.pending = {};
     this.dirty = false;
+    let merged = {};
+    try {
+      const raw = JSON.parse(fs.readFileSync(this.file, "utf8"));
+      if (raw && typeof raw === "object" && !Array.isArray(raw)) merged = raw;
+    } catch {
+      /* no readable file: our own entries are all there is */
+      merged = { ...this.data };
+    }
+    for (const [key, patch] of Object.entries(pending)) {
+      merged[key] = { ...EMPTY, ...(merged[key] || {}), ...patch };
+    }
     try {
       fs.mkdirSync(path.dirname(this.file), { recursive: true });
-      fs.writeFileSync(this.file, JSON.stringify(this.data, null, 2));
+      fs.writeFileSync(this.file, JSON.stringify(merged, null, 2));
+      this.data = merged;
+      this.mtime = fs.statSync(this.file).mtimeMs;
     } catch {
-      /* a failed write must not take the run down */
+      /* a failed write must not take the run down: keep the patches */
+      this.pending = { ...pending, ...this.pending };
+      this.dirty = true;
     }
   }
 }

@@ -73,3 +73,51 @@ test("summarise says only what is there", () => {
     "3 proposals",
   ]);
 });
+
+test("an external rewrite while the hub runs survives the next approve", () => {
+  // scripts/handover.mjs rewrites this file every time a batch finishes. The
+  // hub had loaded it once at startup, so an Approve press wrote a copy from
+  // minutes ago back over it and dropped every commit list recorded since.
+  const file = tmp();
+  fs.writeFileSync(file, JSON.stringify({ site: { branch: "audit/x", commits: [] } }));
+  const hub = new Handover(file);
+  assert.equal(hub.get("site").commits.length, 0);
+
+  // A script rewrites the file underneath the running hub.
+  fs.writeFileSync(
+    file,
+    JSON.stringify({
+      site: { branch: "audit/x", commits: [{ sha: "abc1234", subject: "fix(meta): title" }], note: "from the script" },
+      other: { branch: "audit/y", commits: [{ sha: "def5678", subject: "fix(alt): logo" }] },
+    }),
+  );
+
+  // The hub sees the new state without a restart.
+  assert.equal(hub.get("site").commits.length, 1, "re-read after the file changed");
+  assert.equal(hub.get("site").note, "from the script");
+  assert.ok(hub.get("other"), "a key added by the script is visible");
+
+  // Approving writes the approval without discarding what the script wrote.
+  hub.approve("site");
+  hub.flush();
+  const onDisk = JSON.parse(fs.readFileSync(file, "utf8"));
+  assert.equal(onDisk.site.approved, true);
+  assert.equal(onDisk.site.commits.length, 1, "the script's commits survived the approve");
+  assert.equal(onDisk.site.note, "from the script");
+  assert.equal(onDisk.other.commits.length, 1, "an untouched key is left alone");
+});
+
+test("a script write that lands between an approve and its flush is kept", () => {
+  const file = tmp();
+  fs.writeFileSync(file, JSON.stringify({ site: { branch: "audit/x", commits: [] } }));
+  const hub = new Handover(file);
+  hub.approve("site"); // dirty from here on, so refresh() must not clobber it
+  fs.writeFileSync(
+    file,
+    JSON.stringify({ site: { branch: "audit/x", commits: [{ sha: "aaa", subject: "fix(lang): html" }] } }),
+  );
+  hub.flush();
+  const onDisk = JSON.parse(fs.readFileSync(file, "utf8"));
+  assert.equal(onDisk.site.approved, true, "the approval was not lost");
+  assert.equal(onDisk.site.commits.length, 1, "nor was the write that raced it");
+});
