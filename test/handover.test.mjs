@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { Handover, EMPTY, summarise } from "../src/handover.mjs";
+import { Handover, EMPTY, STATUSES, summarise } from "../src/handover.mjs";
 
 const tmp = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), "lightbox-handover-")), "handover.json");
 
@@ -120,4 +120,24 @@ test("a script write that lands between an approve and its flush is kept", () =>
   const onDisk = JSON.parse(fs.readFileSync(file, "utf8"));
   assert.equal(onDisk.site.approved, true, "the approval was not lost");
   assert.equal(onDisk.site.commits.length, 1, "nor was the write that raced it");
+});
+
+test("a status is kept when the script refreshes the entry, and junk never lands", () => {
+  const file = tmp();
+  const h = new Handover(file);
+  assert.deepEqual(STATUSES, ["active", "paused", "archived", "retired"]);
+
+  h.setStatus("site", "retired");
+  h.flush();
+  assert.equal(JSON.parse(fs.readFileSync(file, "utf8")).site.status, "retired");
+
+  // scripts/handover.mjs refreshes from git through the same shallow set(),
+  // passing only what it computed, so the reviewer's label has to survive it.
+  h.set("site", { branch: "audit/x", commits: [{ sha: "1", subject: "a" }] });
+  h.flush();
+  assert.equal(JSON.parse(fs.readFileSync(file, "utf8")).site.status, "retired");
+
+  h.setStatus("site", "not-a-status");
+  assert.equal(h.get("site").status, "", "junk clears the label rather than being stored");
+  clearInterval(h.timer);
 });

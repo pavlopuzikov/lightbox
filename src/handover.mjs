@@ -13,7 +13,15 @@
 import fs from "node:fs";
 import path from "node:path";
 
+/**
+ * What the project itself is, as opposed to what this pass did to it. The
+ * reviewer sets it from the hub. "" means nobody has said yet, which is worth
+ * seeing: an unlabelled project is one nobody has triaged.
+ */
+export const STATUSES = Object.freeze(["active", "paused", "archived", "retired"]);
+
 export const EMPTY = Object.freeze({
+  status: "", // one of STATUSES, or "" when unset
   base: null, // { branch, sha } the audit branch was cut from
   branch: null, // the audit branch name
   commits: [], // [{ sha, subject }]
@@ -91,6 +99,12 @@ export class Handover {
 
   unapprove(key) {
     return this.set(key, { approved: false, approvedAt: null });
+  }
+
+  /** Set the project's status. An unknown value clears it rather than storing junk. */
+  setStatus(key, status) {
+    const value = STATUSES.includes(status) ? status : "";
+    return this.set(key, { status: value });
   }
 
   all() {

@@ -14,7 +14,7 @@
 
 import fs from "node:fs";
 import http from "node:http";
-import { summarise } from "./handover.mjs";
+import { summarise, STATUSES } from "./handover.mjs";
 import { familiesOf, routesFor } from "./routes.mjs";
 
 const esc = (s) =>
@@ -99,6 +99,16 @@ font:11.5px/1.5 var(--mono);color:var(--ink-2);max-height:260px;overflow:auto;wh
 .row .note{grid-column:2 / -1}.row .num{grid-column:2}
 .row .acts{grid-column:3;flex-direction:row;flex-wrap:wrap;gap:4px 14px}
 .routes{columns:1}}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.status{display:inline-flex;align-items:center;gap:6px}
+.status::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--line);flex:none}
+.status.s-active::before{background:#3f9d6a}
+.status.s-paused::before{background:#b8863b}
+.status.s-archived::before{background:#7d8590}
+.status.s-retired::before{background:#a8453f}
+.status select{appearance:none;background:none;border:0;border-bottom:1px solid var(--line);color:var(--dim);font:inherit;font-size:12px;padding:0 2px 1px;cursor:pointer;letter-spacing:.02em}
+.status select:hover,.status select:focus-visible{color:var(--fg);border-bottom-color:var(--fg)}
+.status.s-unset select{font-style:italic}
 @media (prefers-reduced-motion:no-preference){a,button.text{transition:color .12s ease}}
 `;
 
@@ -161,6 +171,11 @@ function row(p, st, routes, done, hand) {
     }
     <button class="text quiet" data-toggle="pages">${routes.length} pages</button>
     ${node ? `<button class="text quiet" data-toggle="log">log</button>` : ""}
+    <label class="status s-${esc(hand?.status || "unset")}"><span class="vh">Status of ${esc(p.name)}</span>
+      <select data-status="${key}">
+        <option value=""${hand?.status ? "" : " selected"}>status</option>
+        ${STATUSES.map((v) => `<option value="${v}"${hand?.status === v ? " selected" : ""}>${v}</option>`).join("")}
+      </select></label>
     <button class="text${hand?.approved ? " ok" : ""}" data-act="approve" data-key="${key}"${hand ? "" : " hidden"}${
       hand?.approved ? " disabled" : ""
     }>${hand?.approved ? "Approved " + esc(String(hand.approvedAt).slice(0, 10)) : "Approve"}</button>
@@ -240,6 +255,12 @@ document.addEventListener('click',function(e){
   b.disabled=true;b.textContent=b.dataset.act==='install'?'installing…':b.dataset.act==='approve'?'approving…':b.dataset.act+'ping…';
   act(b.dataset.key,b.dataset.act);
 });
+document.addEventListener('change',function(e){
+  var sel=e.target.closest('select[data-status]');
+  if(!sel)return;
+  sel.closest('.status').className='status s-'+(sel.value||'unset');
+  fetch('/api/status/'+sel.dataset.status,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({status:sel.value})}).catch(function(){});
+});
 document.getElementById('stopall').addEventListener('click',function(){
   fetch('/api/stopall',{method:'POST'}).then(refresh);
 });
@@ -273,6 +294,9 @@ async function refresh(){
       var hp=q('[data-hand="'+k+'"]');
       if(hp&&typeof st.handoverLine==='string')hp.textContent=st.handoverLine;
       var ap=row.querySelector('button[data-act="approve"]');
+      var sel=row.querySelector('select[data-status]');
+      if(sel&&document.activeElement!==sel){var sv=(st.handover&&st.handover.status)||'';
+        if(sel.value!==sv){sel.value=sv;sel.closest('.status').className='status s-'+(sv||'unset')}}
       if(ap){var h=st.handover;ap.hidden=!h;if(h){ap.disabled=!!h.approved;ap.classList.toggle('ok',!!h.approved);ap.textContent=h.approved?'Approved '+String(h.approvedAt).slice(0,10):'Approve'}}
     }
   }catch(e){}
@@ -428,7 +452,7 @@ export function createHubServer(ctx) {
     }
 
     if (req.method === "POST") {
-      const m = /^\/api\/(start|stop|install|stopall|approve|unapprove)(?:\/(.+))?$/.exec(p);
+      const m = /^\/api\/(start|stop|install|stopall|approve|unapprove|status)(?:\/(.+))?$/.exec(p);
       if (m) {
         const [, action, key] = m;
         if (action === "stopall") {
@@ -437,6 +461,21 @@ export function createHubServer(ctx) {
         }
         const project = byKey.get(key);
         if (!project) return send(404, "application/json", '{"error":"no such project"}');
+        if (action === "status") {
+          // Set from the hub and read by every other tool, so write it through
+          // now rather than on the 4s timer.
+          let body = "";
+          for await (const chunk of req) body += chunk;
+          let wanted = "";
+          try {
+            wanted = String(JSON.parse(body || "{}").status || "");
+          } catch {
+            wanted = "";
+          }
+          const entry = handover.setStatus(project.key, wanted);
+          handover.flush();
+          return send(200, "application/json", JSON.stringify(entry));
+        }
         if (action === "approve" || action === "unapprove") {
           // The only signal the push step reads. Flushed at once, not on the
           // timer, so a coding session polling the file sees it immediately.

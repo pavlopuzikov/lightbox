@@ -8,8 +8,8 @@
  * For each project on disk with a git checkout it records the current branch,
  * the audit branch's commits above its base, and the totals from
  * .lightbox/audit/<key>.json (plus <key>.after.json when a fix pass has run).
- * Fields a person writes by hand (note, tierC, lighthouse, approved, pushed,
- * pr) are never touched here: set() merges shallowly and this script only
+ * Fields a person writes by hand (status, note, tierC, lighthouse, approved,
+ * pushed, pr) are never touched here: set() merges shallowly and this script only
  * passes what it computed.
  */
 
@@ -114,7 +114,7 @@ async function main() {
     return i === -1 ? GROUP_ORDER.length : i;
   };
   const sorted = [...projects].sort((a, b) => order(a) - order(b) || a.name.localeCompare(b.name));
-  const lines = ["# Front-end audit 2026-09, handover", "", `Refreshed ${new Date().toISOString().slice(0, 16).replace("T", " ")} by scripts/handover.mjs. Hand-written fields (note, proposals, Lighthouse, approval) survive a refresh.`, ""];
+  const lines = ["# Front-end audit 2026-09, handover", "", `Refreshed ${new Date().toISOString().slice(0, 16).replace("T", " ")} by scripts/handover.mjs. Hand-written fields (status, note, proposals, Lighthouse, approval) survive a refresh.`, ""];
   let group = null;
   for (const p of sorted) {
     if (p.group !== group) {
@@ -125,6 +125,7 @@ async function main() {
     const base = e.base ? `${e.base.branch}@${e.base.sha}` : "(none)";
     const n = (e.commits || []).length;
     lines.push(`### ${p.name} (${p.key})  base ${base}  ${e.branch ? `${e.branch}: ${n} commit${n === 1 ? "" : "s"}` : "no audit branch"}  approved: ${e.approved ? `yes, ${String(e.approvedAt).slice(0, 10)}` : "no"}`);
+    if (e.status) lines.push(`Status: ${e.status}`);
     if (e.note) lines.push(`Note: ${e.note}`);
     if (e.currentBranch) lines.push(`Checked out: ${e.currentBranch}`);
     if (e.sweep) {
