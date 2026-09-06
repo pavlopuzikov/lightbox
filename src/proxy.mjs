@@ -382,14 +382,23 @@ function proxyUpgrade(req, socket, head, ctx) {
       else lines.push(`${k}: ${v}`);
     }
     socket.write(lines.join("\r\n") + "\r\n\r\n");
-    if (uhead && uhead.length) socket.unshift(uhead);
+    // Bytes that arrived with either 101 belong to the OTHER side. Pushing
+    // uhead onto the browser socket's readable side (socket.unshift) piped the
+    // dev server's own first, unmasked frame straight back at it, and ws
+    // throws WS_ERR_EXPECTED_MASK on an unmasked frame from a client. Next
+    // and Vite both treat that as an uncaught exception and die.
+    if (uhead && uhead.length) socket.write(uhead);
+    if (head && head.length) usocket.write(head);
     usocket.on("error", () => socket.destroy());
     socket.on("error", () => usocket.destroy());
+    // Upgraded sockets allow half-open, so a pipe ending one side leaves the
+    // other waiting forever and keeps the dev server's ws count climbing.
+    usocket.on("close", () => socket.destroy());
+    socket.on("close", () => usocket.destroy());
     usocket.pipe(socket);
     socket.pipe(usocket);
   });
   up.on("error", () => socket.destroy());
-  if (head && head.length) up.write(head);
   up.end();
 }
 

@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import http from "node:http";
+import crypto from "node:crypto";
 import { createProjectServer, upstreamHeaders } from "../src/proxy.mjs";
 import { loopbackOpen, portOpen } from "../src/supervisor.mjs";
 import { Progress } from "../src/progress.mjs";
@@ -227,6 +228,75 @@ test("a dev server that binds only the IPv6 loopback is detected and proxied", a
     assert.equal(r.status, 200);
     assert.ok(r.body.toString().startsWith("hello from ::1 via localhost:" + upstream), r.body.toString());
   } finally {
+    await new Promise((r) => server.close(r));
+    await new Promise((r) => up.close(r));
+  }
+});
+
+test("the upstream's first WebSocket bytes go to the browser, never back upstream", async () => {
+  // Reproduces WS_ERR_EXPECTED_MASK: the dev server sends an unmasked frame
+  // together with its 101, and the proxy used to unshift it onto the browser
+  // socket's readable side, so socket.pipe(usocket) echoed it to the server.
+  const received = [];
+  const up = http.createServer((req, res) => res.end("http"));
+  up.on("upgrade", (req, sock) => {
+    const key = req.headers["sec-websocket-key"];
+    const accept = crypto.createHash("sha1").update(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").digest("base64");
+    // 101 and a one-byte unmasked text frame "s" in the same write.
+    sock.write(Buffer.concat([
+      Buffer.from("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n" + `Sec-WebSocket-Accept: ${accept}\r\n\r\n`),
+      Buffer.from([0x81, 0x01, 0x73]),
+    ]));
+    sock.on("data", (d) => received.push(...d));
+    sock.on("end", () => sock.destroy());
+  });
+  await new Promise((r) => up.listen(0, "127.0.0.1", r));
+  const upstream = up.address().port;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lightbox-ws-"));
+  const project = { key: "ws", name: "WS", dir, kind: "node", port: 0, upstream };
+  const ctx = {
+    project,
+    progress: new Progress(path.join(dir, ".lightbox", "progress.json")),
+    supervisor: { state: () => ({ state: "ready", host: "127.0.0.1" }), tail: () => "", start: async () => {} },
+    hubUrl: "http://localhost:4000/",
+    bridge: "http://127.0.0.1:1",
+    overlayPath: path.join(HERE, "..", "src", "overlay.js"),
+    inspectCommentPath: null,
+  };
+  const server = createProjectServer(ctx);
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  project.port = server.address().port;
+  try {
+    const got = await new Promise((resolve, reject) => {
+      const req = http.request({
+        host: "127.0.0.1",
+        port: project.port,
+        path: "/_next/hmr",
+        headers: { connection: "Upgrade", upgrade: "websocket", "sec-websocket-version": "13", "sec-websocket-key": "dGhlIHNhbXBsZSBub25jZQ==" },
+      });
+      req.on("upgrade", (res, sock, h) => {
+        const chunks = [h];
+        let settled = false;
+        const done = () => {
+          if (settled) return;
+          settled = true;
+          resolve({ status: res.statusCode, bytes: Buffer.concat(chunks) });
+          setTimeout(() => sock.destroy(), 150);
+        };
+        sock.on("data", (d) => { chunks.push(d); if (Buffer.concat(chunks).length >= 3) done(); });
+        if (h.length >= 3) done();
+        setTimeout(done, 500);
+      });
+      req.on("error", reject);
+      req.end();
+    });
+    assert.equal(got.status, 101);
+    assert.deepEqual([...got.bytes.subarray(0, 3)], [0x81, 0x01, 0x73], "the frame reached the browser");
+    await new Promise((r) => setTimeout(r, 100));
+    assert.deepEqual(received, [], "nothing was echoed back to the dev server");
+  } finally {
+    server.closeAllConnections?.();
+    up.closeAllConnections?.();
     await new Promise((r) => server.close(r));
     await new Promise((r) => up.close(r));
   }
