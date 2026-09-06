@@ -253,6 +253,38 @@ function firstStopInPage() {
  * One route at one width
  * ------------------------------------------------------------------ */
 
+/**
+ * Wait for entrance animations to finish before measuring anything.
+ *
+ * This used to be a flat 400ms, which is shorter than a normal staggered
+ * entrance, so axe read colours mid-fade and reported contrast failures that
+ * were not there once the page settled: one element on one route came back at
+ * 3.33, 3.67 and 4.15 on three widths, and did not fail at all when the page
+ * was left alone. Infinite animations (a looping shimmer) never finish, so they
+ * are ignored rather than waited on, and the whole wait is capped.
+ */
+async function settleAnimations(page, cap = 2500) {
+  const started = Date.now();
+  try {
+    await page.waitForFunction(
+      () => {
+        if (typeof document.getAnimations !== "function") return true;
+        return !document.getAnimations().some((a) => {
+          if (a.playState !== "running") return false;
+          const it = a.effect && a.effect.getTiming ? a.effect.getTiming().iterations : 1;
+          return it !== Infinity;
+        });
+      },
+      undefined,
+      { timeout: cap, polling: 100 }
+    );
+  } catch {
+    /* something loops or never settles: measure it as it is rather than hang */
+  }
+  // A frame or two for the last committed style to land.
+  await sleep(Math.max(150, 400 - (Date.now() - started)));
+}
+
 async function sweepRoute(context, base, route, width, opts) {
   const page = await context.newPage();
   const consoleErrors = [];
@@ -288,7 +320,7 @@ async function sweepRoute(context, base, route, width, opts) {
     const res = await page.goto(base + route.path, { waitUntil: "load", timeout: opts.timeout });
     out.status = res ? res.status() : 0;
     await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
-    await sleep(400);
+    await settleAnimations(page);
     const finalUrl = page.url();
     if (finalUrl !== base + route.path) out.finalUrl = finalUrl.replace(base, "");
 
@@ -307,10 +339,17 @@ async function sweepRoute(context, base, route, width, opts) {
     try {
       await page.addScriptTag({ content: opts.axe });
       const axe = await page.evaluate(async () => {
-        const r = await window.axe.run(document, {
-          runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
-          resultTypes: ["violations"],
-        });
+        // Audit the page, not our own furniture. The overlay host and its reset
+        // sheet are injected by src/overlay.js and are not the project's markup;
+        // left in, they added three color-contrast nodes to every route of every
+        // project and made the totals read as the project's own failures.
+        const r = await window.axe.run(
+          { exclude: [["[data-lightbox]"], ["[data-lightbox-reset]"]] },
+          {
+            runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
+            resultTypes: ["violations"],
+          }
+        );
         return r.violations.map((v) => ({
           id: v.id,
           impact: v.impact,
