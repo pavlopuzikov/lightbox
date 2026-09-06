@@ -572,10 +572,12 @@ function diff() {
       cmp("console", ca.consoleErrors > cb.consoleErrors, false, `${cb.consoleErrors} -> ${ca.consoleErrors}`);
       if (ca.consoleErrors < cb.consoleErrors) better.push(`${cell} console ${cb.consoleErrors} -> ${ca.consoleErrors}`);
       cmp("requests", ca.failedRequests > cb.failedRequests, false, `${cb.failedRequests} -> ${ca.failedRequests}`);
+      if (ca.failedRequests < cb.failedRequests) better.push(`${cell} requests ${cb.failedRequests} -> ${ca.failedRequests}`);
       cmp("overflow", ca.overflow, cb.overflow);
       cmp("contrast", ca.contrast > cb.contrast, false, `${cb.contrast} -> ${ca.contrast}`);
       if (ca.contrast < cb.contrast) better.push(`${cell} contrast ${cb.contrast} -> ${ca.contrast}`);
       cmp("axe", ca.axeSerious > cb.axeSerious, false, `${cb.axeSerious} -> ${ca.axeSerious}`);
+      if (ca.axeSerious < cb.axeSerious) better.push(`${cell} axe ${cb.axeSerious} -> ${ca.axeSerious}`);
       cmp("meta", !ca.metaOk, !cb.metaOk, ca.metaMissing.join(","));
       cmp("focus", !ca.focusOk, !cb.focusOk);
       cmp("motion", !ca.motionOk, !cb.motionOk);
