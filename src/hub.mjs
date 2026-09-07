@@ -100,11 +100,27 @@ section .blurb{margin:9px 0 2px;color:var(--ink-3);font-size:12.5px;line-height:
  * is one hairline apart from the next and nothing is boxed, padded or
  * shadowed. Density is the feature.
  * ---------------------------------------------------------------- */
-.list{margin-top:10px}
-.row{display:grid;grid-template-columns:16px minmax(150px,1fr) minmax(0,1.9fr) 96px 116px 200px;
-gap:0 18px;align-items:start;padding:12px 4px 11px;border-bottom:var(--rule-hair) solid var(--rule-ink);
-position:relative}
-.row:first-child{border-top:var(--rule-hair) solid var(--rule-ink)}
+.list{margin-top:14px}
+
+/* Tabular matter in a broadside is ruled both ways: heavy horizontals separate
+   the entries, light verticals separate the fields. Without the verticals a row
+   is five different kinds of fact set in one ink at one size, and you have to
+   read it to find out where one ends and the next starts. The two weights are
+   deliberately unequal, so the eye still reads the list as rows first. */
+.cols,.row{display:grid;
+grid-template-columns:16px minmax(150px,1fr) minmax(0,1.8fr) 104px 158px 224px;gap:0}
+.cols>*,.row>.c-name,.row>.c-note,.row>.num,.row>.acts{padding-right:16px}
+.cols>.r,.row>.c-note,.row>.num,.row>.acts{
+border-left:var(--rule-hair) solid var(--rule-ink-2);padding-left:16px}
+
+/* The ledger head, once per section. It is the cheapest possible way to say
+   what the columns are: four words, set at the size a printed table sets its
+   headings, and never repeated between rows. */
+.cols{padding:0 4px 7px;font:9.5px/1.4 var(--mono);text-transform:uppercase;
+letter-spacing:var(--track-micro);color:var(--ink-3);border-bottom:var(--rule-hair) solid var(--rule-ink)}
+
+.row{align-items:stretch;padding:12px 4px 11px;
+border-bottom:var(--rule-hair) solid var(--rule-ink);position:relative}
 .row:hover{background:var(--paper-tint)}
 .row.missing .name,.row.missing .note{color:var(--ink-3)}
 
@@ -119,12 +135,19 @@ position:relative}
 background:linear-gradient(var(--ink),var(--ink)) 0 0/100% 50% no-repeat}
 .mark.failed{background:var(--vermilion);border-color:var(--vermilion)}
 
+/* The name column is the only one that carries two registers, a title and a
+   label, so it gets the extra breathing room the rules took away. */
+.c-name{padding-top:1px}
 .name{margin:0;font:400 14px/1.2 var(--display);font-stretch:condensed;text-transform:uppercase;
 letter-spacing:.05em;color:var(--ink)}
 .sys{margin-top:5px;font:10px/1.4 var(--mono);text-transform:uppercase;
 letter-spacing:var(--track-caps);color:var(--ink-3)}
 .note{margin:1px 0 0;color:var(--ink-2);font-size:12.5px;line-height:1.55}
-.hand{margin:5px 0 0;font:10.5px/1.75 var(--mono);color:var(--ink-3)}.hand:empty{display:none}
+/* Machine output, marked as such. The note above it is something you wrote;
+   this line is what the audit found, and a rule in the margin is how a proof
+   distinguishes the two without spending a colour on it. */
+.hand{margin:6px 0 0;padding-left:9px;border-left:2px solid var(--rule-ink);
+font:10.5px/1.7 var(--mono);color:var(--ink-3)}.hand:empty{display:none}
 .err{margin:6px 0 0;color:var(--vermilion);font-size:12px;line-height:1.5;white-space:pre-wrap}
 .err:empty{display:none}
 .adopted{margin:6px 0 0;color:var(--ink-3);font-size:12px;line-height:1.5}
@@ -153,12 +176,12 @@ text-decoration-thickness:1.5px;text-underline-offset:3px}
 
 /* Progress sits on the row's own hairline: the rule fills up rather than a
    bar being added next to it. */
-/* A short measure under the project name, not a bar across the row. Run it
-   the full width and a finished project draws a 2px black line the width of
-   the sheet, which reads as a section rule and cuts the list in half in the
-   wrong place. Held to the name column, it stays a gauge. */
-.prog{position:absolute;left:34px;width:168px;bottom:calc(var(--rule-hair) * -1);
-height:var(--rule-mid);overflow:hidden}
+/* The gauge sits in the column it measures. Floated at the bottom edge of the
+   row it underlined the project name instead, which reads as a stray rule; and
+   run the full width, a finished project drew a 2px black line the width of
+   the sheet and cut the list in half in the wrong place. */
+.prog{display:block;margin-top:7px;height:var(--rule-mid);background:var(--rule-ink);
+overflow:hidden}
 .prog i{display:block;height:100%;max-width:100%;background:var(--ink)}
 
 .more{grid-column:2 / -1;display:none;padding:12px 0 4px}
@@ -203,7 +226,11 @@ font:10px/1.9 var(--mono);text-transform:uppercase;letter-spacing:var(--track-mi
 .wrap{padding:0 20px}
 header{grid-template-columns:1fr;align-items:start}
 .tally{text-align:left}
-.row{grid-template-columns:16px 1fr 1fr;gap:6px 14px}
+/* Three columns carrying six fields: the vertical rules would no longer line
+   up with anything, so they go, and the head goes with them. */
+.cols{display:none}
+.row{grid-template-columns:16px 1fr 1fr;gap:6px 14px;align-items:start}
+.row>.c-note,.row>.num,.row>.acts{border-left:0;padding-left:0}
 .row .note{grid-column:2 / -1}.row .num{grid-column:2}
 .row .acts{grid-column:3;flex-direction:row;flex-wrap:wrap;gap:6px 14px}
 .routes{columns:1}}
@@ -229,6 +256,12 @@ function handLine(h) {
   return [h.note, ...summarise(h)].filter(Boolean).join(" · ");
 }
 
+/* The column heads. Same grid as a row, so the rules line up; written once
+   here rather than per section, because two copies of a grid template is how
+   the head and the body stop agreeing. */
+const COLS = `<div class="cols"><span></span><span>Project</span><span class="r">Notes</span>
+<span class="r">Pages</span><span class="r">Ports</span><span class="r">Actions</span></div>`;
+
 function row(p, st, routes, done, hand) {
   const missing = !p.exists;
   const key = esc(p.key);
@@ -246,11 +279,11 @@ function row(p, st, routes, done, hand) {
 
   return `<div class="row${missing ? " missing" : ""}" data-key="${key}">
   <span class="mark ${node ? esc(st.state) : "static"}" data-mark="${key}"></span>
-  <div>
+  <div class="c-name">
     <h3 class="name">${esc(p.name)}</h3>
     <div class="sys">${esc(p.system || "no named system")} · ${esc(runner)}</div>
   </div>
-  <div>
+  <div class="c-note">
     ${p.note ? `<p class="note">${esc(p.note)}</p>` : ""}
     ${missing ? `<p class="err">Directory not found: ${esc(p.dir)}</p>` : ""}
     ${
@@ -262,12 +295,12 @@ function row(p, st, routes, done, hand) {
     <p class="adopted" data-adopted="${key}">${esc(st.adopted ? st.note || "Adopted an existing server on this port." : "")}</p>
     <p class="hand" data-hand="${key}">${esc(handLine(hand))}</p>
   </div>
-  <div class="num"><b data-done="${key}">${done}</b> <span class="m">of</span> ${routes.length} <span class="m">pages</span>${
+  <div class="num"><b data-done="${key}">${done}</b> <span class="m">of</span> ${routes.length}${
     fams.length > 1 ? `<br>${fams.length} <span class="m">families</span>` : ""
-  }</div>
-  <div class="num"><span class="m">:</span>${p.port}${
+  }<span class="prog"><i style="width:${pct}%" data-prog="${key}"></i></span></div>
+  <div class="num"><span class="m">review :</span>${p.port}${
     node
-      ? `<br><span class="m">dev :</span>${p.upstream} <span class="m" data-state="${key}">${esc(
+      ? `<br><span class="m">dev :</span>${p.upstream}<br><span class="m" data-state="${key}">${esc(
           STATE_LABEL[st.state] || ""
         )}</span>`
       : ""
@@ -294,7 +327,6 @@ function row(p, st, routes, done, hand) {
       hand?.approved ? " disabled" : ""
     }>${hand?.approved ? "Approved " + esc(String(hand.approvedAt).slice(0, 10)) : "Approve"}</button>
   </div>
-  <span class="prog"><i style="width:${pct}%" data-prog="${key}"></i></span>
   <div class="more pages"><ul class="routes">${fams
     .map(
       (f) =>
@@ -336,7 +368,7 @@ function page(ctx) {
         items.length
       }${live < items.length ? ` &middot; ${items.length - live} missing` : ""}</span></div>${
         g.blurb ? `<p class="blurb">${esc(g.blurb)}</p>` : ""
-      }<div class="list">${rows}</div></section>`;
+      }<div class="list">${COLS}${rows}</div></section>`;
     })
     .join("");
 
@@ -451,8 +483,7 @@ main.wait{max-width:660px;margin:0 auto;padding:84px 44px}
 .wait h1{font-size:clamp(38px,6vw,58px);margin:0 0 6px}
 .wait .rule-heavy{margin:14px 0 0}
 .wait .note{font-size:13.5px;max-width:52ch;margin:16px 0 0}
-.wait .prog{position:static;display:block;height:var(--ornament-height);
-background:var(--paper-tint);margin:22px 0 16px}
+.wait .prog{height:var(--ornament-height);background:var(--paper-tint);margin:22px 0 16px}
 .wait .prog i{background:var(--vermilion)}
 .wait .acts{flex-direction:row;gap:24px;margin:0 0 24px}
 </style></head><body><main class="wait">

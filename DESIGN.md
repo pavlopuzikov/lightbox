@@ -38,7 +38,7 @@ stopped working and should be pulled back.
 | `--vermilion` | `#c4161c` | The tally, failures, focus rings, the OPEN action. |
 | `--vermilion-2` | `#8e1014` | Pressed and hovered red. |
 | `--rule-ink` | `#d6ceb0` | Hairlines between rows. |
-| `--rule-ink-2` | `#e6e0c8` | The lighter hairline, inside panels. |
+| `--rule-ink-2` | `#e6e0c8` | The lighter hairline, between fields in a row. |
 
 Contrast against `--paper`, measured in the browser on the rendered hub rather
 than calculated by hand: `--ink` 16.49:1, `--ink-2` 11.05:1, `--ink-3` 5.25:1,
@@ -97,6 +97,35 @@ screens, and rules cost no vertical space where padding does. The one exception
 is the overlay, which floats over an arbitrary page and needs a hard edge: it
 gets a 2px border and a solid 4px offset with no blur, which is a second
 impression slightly off register rather than a drop shadow.
+
+Ruled one way, a list is rows. The hub is ruled both ways, the way a broadside
+sets tabular matter: heavy horizontals separate the entries, light verticals
+separate the fields inside one. Without the verticals a project row is five
+different kinds of fact set in one ink at one size, and you have to read it to
+find out where one ends and the next begins.
+
+The two directions are deliberately unequal. Horizontals are `--rule-ink`,
+verticals are `--rule-ink-2`, which is lighter, so the eye still reads the list
+as rows first and columns second. The verticals start at Notes: the state mark
+and the project name are one field, and everything to the right of them is a
+different kind of fact from the one before it.
+
+Each section carries the column names once, in 9.5px mono micro-caps, and never
+repeats them between rows. That head pays for itself twice: it says what the
+columns are, and it lets the cells drop the unit words they used to carry, so
+`6 of 15 pages` in forty rows became `6 of 15` under a heading that already
+says PAGES. The head and the rows share one grid template declared in one
+place, because two copies of a grid template is how a head and its body stop
+agreeing.
+
+The progress gauge belongs to the count it measures and sits directly under it,
+inside the Pages cell. Floated at the bottom edge of the row it underlined the
+project name instead and read as a stray rule; run the full width, a finished
+project drew a 2px black line the width of the sheet and cut the list in half
+in the wrong place.
+
+Below 900px the row falls to three columns carrying six fields. The verticals
+no longer line up with anything, so they go, and the head goes with them.
 
 ## Ornament
 
