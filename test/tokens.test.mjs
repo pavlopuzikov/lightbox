@@ -102,3 +102,12 @@ test("node_modules is not scanned for stylesheets", () => {
   // The only definition is inside a dependency, so the token counts as missing.
   assert.equal(check("t", dir).missing.length, 1);
 });
+
+test("a value cell with a trailing gloss is read, not skipped", () => {
+  // "`#C8A96E` (gold)". Requiring the whole cell to be backticked skipped the
+  // row entirely, which reads as a pass and hid a real drift.
+  const md = TABLE("| `--accent` (gold) | `#C8A96E` (gold) | primary accent |");
+  assert.equal(documented(md).get("--accent"), "#C8A96E");
+  const dir = project(md, { "app/globals.css": ":root { --accent: #F2ECE0; }" });
+  assert.equal(check("t", dir).stale.length, 1);
+});

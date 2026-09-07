@@ -75,7 +75,12 @@ export function documented(md) {
     const names = [...cells[0].matchAll(/`(--[a-z0-9-]+)`/gi)].map((m) => m[1]);
     if (names.length === 0) continue;
     for (const cell of cells.slice(1, 3)) {
-      const v = /^`([^`]+)`$/.exec(cell);
+      // The value may carry a trailing gloss: "`#C8A96E` (gold)". Requiring the
+      // backticks to be the whole cell silently skipped that row, and skipping
+      // is the worst outcome here because it reads as a pass. innovation-portal
+      // documented a gold --accent that way while the CSS had moved to an
+      // off-white, and the check reported the project as matching.
+      const v = /^`([^`]+)`/.exec(cell);
       if (!v) continue;
       const value = v[1].trim();
       if (!/^(#[0-9a-f]{3,8}|rgba?\(|hsla?\(|oklch\(|color-mix\(|var\(|[0-9])/i.test(value)) continue;
