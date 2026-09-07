@@ -25,6 +25,10 @@ export const DEFAULTS = {
   // The branch `lightbox handover` reads fix commits from, in every project.
   // It used to be a date-stamped constant compiled into the script.
   auditBranch: "audit/front-end",
+  // Origins allowed to read /api/state cross-origin. Empty means none, which
+  // is the right default for a server on loopback that any page in your
+  // browser can address. See corsHeaders in src/hub.mjs.
+  hubOrigins: [],
   scan: [],
   projects: [],
   groups: [],

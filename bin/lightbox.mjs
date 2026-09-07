@@ -116,6 +116,9 @@ same review overlay.
                                 against what the project declares
   lightbox handover             refresh .lightbox/handover.json and HANDOVER.md
   lightbox reviews drain|list   move stored review notes onto disk
+  lightbox publish              write a read-only snapshot of the catalogue
+                                into the vault, for surfaces that cannot reach
+                                the hub on localhost
 
 Config and .lightbox/ always resolve from the current working directory, not
 from wherever lightbox itself is installed.
@@ -137,10 +140,20 @@ async function delegate(name, rest) {
   if (name === "tokens") return (await import("../src/cli/tokens.mjs")).main(rest);
   if (name === "handover") return (await import("../src/cli/handover.mjs")).main(rest);
   if (name === "reviews") return (await import("../src/cli/reviews.mjs")).main(rest);
+  if (name === "publish") return (await import("../src/cli/publish.mjs")).main(rest);
   return undefined;
 }
 
-const DELEGATED = ["sweep", "diff", "summary", "login", "tokens", "handover", "reviews"];
+const DELEGATED = [
+  "sweep",
+  "diff",
+  "summary",
+  "login",
+  "tokens",
+  "handover",
+  "reviews",
+  "publish",
+];
 
 switch (cmd) {
   case "init":

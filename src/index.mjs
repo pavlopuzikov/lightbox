@@ -223,6 +223,7 @@ export async function serve(config, cwd = process.cwd(), opts = {}) {
     handover,
     hubUrl,
     hubPort: config.hubPort,
+    hubOrigins: config.hubOrigins || [],
     bridge: config.bridge,
     inspectCommentPath,
   });

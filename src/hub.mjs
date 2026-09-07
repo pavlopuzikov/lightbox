@@ -558,6 +558,41 @@ function bridgeStatus(bridge) {
   });
 }
 
+/**
+ * Which other origins may READ the hub's state, and nothing more.
+ *
+ * The hub binds loopback, which is a weaker boundary than it sounds: any page
+ * in your browser can make requests to 127.0.0.1, so without an allowlist a
+ * site you happened to open could ask this hub for the name and directory of
+ * every project you have. Empty by default, so nothing can, and a config has
+ * to name an origin before it gets an answer.
+ *
+ * Read-only by construction, and enforced twice over: only GET is offered in
+ * Allow-Methods, and only /api/state is answered at all. The POST endpoints
+ * that start and stop dev servers never carry these headers, so a permitted
+ * origin can watch the hub and cannot touch it.
+ *
+ * Allow-Private-Network is what Chrome's Private Network Access requires
+ * before a page served from the public internet may reach a loopback address.
+ * Without it the preflight fails and the fetch never happens, which looks
+ * exactly like the hub being down.
+ */
+function corsHeaders(ctx, req) {
+  const origin = req.headers.origin;
+  const allowed = ctx.hubOrigins || [];
+  if (!origin || !allowed.includes(origin)) return null;
+  return {
+    "access-control-allow-origin": origin,
+    "access-control-allow-methods": "GET, OPTIONS",
+    "access-control-allow-headers": "content-type",
+    "access-control-allow-private-network": "true",
+    // Origin decides the response, so a shared cache must not serve one
+    // origin's answer to another.
+    vary: "Origin",
+    "access-control-max-age": "600",
+  };
+}
+
 export function createHubServer(ctx) {
   const { catalogue, supervisor, progress, handover } = ctx;
   const byKey = new Map(catalogue.projects.map((p) => [p.key, p]));
@@ -566,11 +601,21 @@ export function createHubServer(ctx) {
     const url = new URL(req.url, "http://localhost");
     const p = url.pathname;
 
+    // Only the read-only state endpoint is ever cross-origin, and only for an
+    // origin the config named. Everything else answers as it always did.
+    const cors = p === "/api/state" ? corsHeaders(ctx, req) : null;
+
     const send = (code, type, body) => {
       if (res.headersSent) return;
-      res.writeHead(code, { "content-type": type, "cache-control": "no-store" });
+      res.writeHead(code, { "content-type": type, "cache-control": "no-store", ...(cors || {}) });
       res.end(body);
     };
+
+    if (req.method === "OPTIONS") {
+      if (!cors) return send(404, "text/plain", "not found");
+      res.writeHead(204, cors);
+      return res.end();
+    }
 
     // The handler is async, so anything it throws becomes an unhandled
     // rejection and the socket is left open with no status line. A hung tab is
