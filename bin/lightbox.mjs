@@ -112,6 +112,8 @@ same review overlay.
   lightbox login --key <k>      save a storage state for routes behind auth
 
   lightbox tokens [--key <k>]   DESIGN.md token drift; exit 1 on drift
+  lightbox tokens --runtime     what the tokens compute to in a browser,
+                                against what the project declares
   lightbox handover             refresh .lightbox/handover.json and HANDOVER.md
   lightbox reviews drain|list   move stored review notes onto disk
 

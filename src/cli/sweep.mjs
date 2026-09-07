@@ -129,7 +129,7 @@ async function borrow(name, from) {
   }
 }
 
-async function loadPlaywright(from) {
+export async function loadPlaywright(from) {
   const mod = await borrow("playwright", from);
   const entry = fs.existsSync(path.join(mod, "index.mjs"))
     ? path.join(mod, "index.mjs")
@@ -142,7 +142,7 @@ async function loadAxe(from) {
   return fs.readFileSync(path.join(mod, "axe.min.js"), "utf8");
 }
 
-async function findProject(key) {
+export async function findProject(key) {
   const { config } = await loadConfig(ROOT);
   const { projects } = buildCatalogue(config);
   const project = projects.find((p) => p.key === key);
@@ -151,7 +151,7 @@ async function findProject(key) {
 }
 
 /* Boot through the hub so the sweep sees what the walker sees. */
-async function ensureUp(project, hub) {
+export async function ensureUp(project, hub) {
   if (project.kind !== "node") return { state: "static" };
   const state = async () => (await fetch(`${hub}/api/state/${project.key}`)).json();
   let st = await state();
