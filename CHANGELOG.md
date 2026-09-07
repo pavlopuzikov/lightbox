@@ -6,6 +6,66 @@ The tool was used to run a front-end audit across 42 projects, and the audit is
 what produced this list. Everything here is a defect the pass found in the tool
 itself rather than in the projects it was pointed at.
 
+### The review surface could not be seen, and the walk could not finish
+
+Four defects, all found by using the tool on pavlopuzikov.com and all measured
+there before and after.
+
+- **The bar was translucent, so the page came through it.** It sat at
+  `opacity: .62` and came up to `1` on hover, on the theory that a see-through
+  strip recedes politely. Park it over the seam where a light section meets a
+  dark one, which is where the bottom of a landing page usually is, and the
+  cream goes muddy grey-green, the ink border goes grey and the vermilion rule
+  goes pink. It is opaque now. Cream stock with a hard offset already sits
+  quietly against someone else's page.
+- **inspect-comment's dock was drawn and then buried.** It mounts on a 0x0
+  `position: fixed` div and puts `z-index: 2147483001` on the dock inside it. A
+  fixed element with `z-index: auto` is itself a stacking context, so that
+  number only ever competed with inspect-comment's own layers while the host
+  competed with the page at `auto` and lost to any positioned section after it.
+  Measured on the portfolio: 35px tall, fully opaque, and only the top ten
+  pixels reached the screen. The overlay now gives the host the z-index its
+  contents already assume. lightbox's own bar had been dodging this by
+  accident, because its host is `all: initial` and therefore static.
+- **The dock is drawn in the design system now.** It was the one part of the
+  review surface still in inspect-comment's own look, a near-black rounded pill
+  under a blurred shadow, two corners away from a letterpress bar. It is
+  restyled from `overlay.js` into inspect-comment's open shadow root rather
+  than in inspect-comment itself, which is used outside lightbox and should
+  keep its own look there. The panel is left alone on purpose: it is a tool
+  that appears while you use it, not chrome that sits in the frame while you
+  judge someone's colours.
+- **`next` walked in a circle.** The position was derived from `location` alone,
+  so any route that redirects threw the walk back to wherever the landing page
+  sits in the list. `/about` 308s to `/#about`, whose pathname is `/`, which
+  reads as route 1, so the walk ran 1,2,3,4,5,6,1,2,... and pages 7 to 15 were
+  unreachable. The intended index is now carried across the navigation, and the
+  bar says `/about → /` in vermilion when a route did not serve itself.
+
+### An unfilled dynamic route is not a page
+
+`/work/[slug]` is a literal request. A dev server answers it by compiling for
+several seconds and then rendering a 404, which made the three dynamic routes on
+the portfolio the slowest clicks in the walk for the least return.
+
+- The walk steps over any route still holding a `[segment]`. The sheet still
+  lists it, tagged dynamic, so it is visibly skipped rather than quietly
+  dropped.
+- `params` takes a route-keyed override, because one param name can mean two
+  unrelated things in one project: `/work/[slug]` and `/creative/[slug]` have
+  disjoint slug sets, and one flat map fills the second with a value that 404s.
+
+  ```json
+  "params": {
+    "slug": "atlas",
+    "/creative/[slug]": { "slug": "avanhard" }
+  }
+  ```
+
+  A route pattern always begins with `/` and a param name never can, so the two
+  kinds of key cannot collide. With this the portfolio goes from 15 routes, 3 of
+  them unvisitable and 1 of them a redirect, to 14 that all return 200.
+
 ### The pages you land on when something is wrong look like the tool now
 
 The hub and the overlay went on the design system first. The three pages the

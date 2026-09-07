@@ -93,11 +93,31 @@ function cleanRoute(route) {
   return r;
 }
 
+/**
+ * Fill a route's dynamic segments from the project's `params`.
+ *
+ * One param name can mean two unrelated things in one project. pavlopuzikov.com
+ * has both /work/[slug] and /creative/[slug], and their slug sets are disjoint,
+ * so a single flat map fills one of them with a value that renders a 404. An
+ * entry keyed by the route pattern itself overrides the flat map for that route
+ * and nothing else:
+ *
+ *   "params": {
+ *     "slug": "atlas",
+ *     "/creative/[slug]": { "slug": "avanhard" }
+ *   }
+ *
+ * A route pattern always begins with "/" and a param name never can, so the two
+ * kinds of key cannot collide.
+ */
 function fillParams(route, params) {
   if (!params) return route;
+  const per = params[route];
+  const scope = per && typeof per === "object" ? { ...params, ...per } : params;
   return route.replace(/\[{1,2}(\.{3})?([^\]]+)\]{1,2}/g, (m, spread, name) => {
     const clean = name.replace(/^\.{3}/, "");
-    return params[clean] != null ? String(params[clean]) : m;
+    const v = scope[clean];
+    return v != null && typeof v !== "object" ? String(v) : m;
   });
 }
 

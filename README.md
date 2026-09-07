@@ -158,7 +158,24 @@ upstream port, and `PORT` is set in the environment either way.
 - Static: every `.html` under the root, `index.html` as its directory.
 
 Dynamic segments keep their brackets, so a `[person]` route with no value is
-still listed, and `params` fills in the ones you have real values for.
+still listed, and `params` fills in the ones you have real values for. An
+unfilled one stays in the sheet, tagged dynamic, but `Alt`+`]` steps over it:
+`/people/[person]` is a literal request, and a dev server answers it by
+compiling for several seconds and then rendering a 404.
+
+One param name can mean two unrelated things in one project. Where it does, key
+an entry by the route pattern itself and it overrides the flat map for that
+route and nothing else:
+
+```json
+"params": {
+  "slug": "atlas",
+  "/creative/[slug]": { "slug": "avanhard" }
+}
+```
+
+A route pattern always begins with `/` and a param name never can, so the two
+kinds of key cannot collide.
 
 ## Keyboard
 

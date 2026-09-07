@@ -154,3 +154,41 @@ test("static: .html files become clean routes, index folds, the root leads, fami
   assert.equal(posix(guide.file), "docs/guide.html");
   assert.equal(posix(routes.find((r) => r.path === "/docs").file), "docs/index.html");
 });
+
+test("one param name in two route trees is filled per route, not once for both", () => {
+  // pavlopuzikov.com is the real case: /work/[slug] and /creative/[slug] take
+  // disjoint slug sets, so a single flat map fills one of them with a value
+  // that renders a 404, and costs a dev-server compile to find that out.
+  const dir = tree({
+    "app/work/[slug]/page.tsx": "",
+    "app/creative/[slug]/page.tsx": "",
+  });
+  const routes = routesFor({
+    key: key("twotrees"),
+    dir,
+    kind: "node",
+    params: { slug: "atlas", "/creative/[slug]": { slug: "avanhard" } },
+  });
+  const paths = routes.map((r) => r.path);
+  assert.ok(paths.includes("/work/atlas"), paths.join(" "));
+  assert.ok(paths.includes("/creative/avanhard"), paths.join(" "));
+  assert.equal(
+    routes.filter((r) => r.dynamic).length,
+    0,
+    "every segment filled, so the walk has nothing to step over"
+  );
+});
+
+test("a route-keyed override is not itself mistaken for a param value", () => {
+  const dir = tree({ "app/x/[slug]/page.tsx": "" });
+  const routes = routesFor({
+    key: key("objectparam"),
+    dir,
+    kind: "node",
+    // No flat slug, and the only entry for that name is an object meant for a
+    // different route.
+    params: { "/other/[slug]": { slug: "nope" } },
+  });
+  assert.equal(routes[0].path, "/x/[slug]");
+  assert.equal(routes[0].dynamic, true, "left unfilled, rather than filled with [object Object]");
+});
