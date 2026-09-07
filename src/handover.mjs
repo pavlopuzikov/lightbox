@@ -151,6 +151,52 @@ export class Handover {
   }
 }
 
+/** Totals key on the left, the coverage bucket that measured it on the right. */
+const COVERAGE_KEY = {
+  consoleErrors: "console",
+  failedRequests: "requests",
+  overflow: "overflow",
+  contrast: "contrast",
+  axeSerious: "axe",
+  meta: "meta",
+  focus: "focus",
+  motion: "motion",
+};
+
+/** `complete`, `12/36 unmeasured`, or `unrecorded` for a pre-coverage audit. */
+export function coverageOf(totals, k) {
+  if (!totals || !totals.coverage) return "unrecorded";
+  const c = totals.coverage.byCheck && totals.coverage.byCheck[COVERAGE_KEY[k]];
+  if (!c) return "unrecorded";
+  return c.unmeasured ? `${c.unmeasured}/${c.measured + c.unmeasured} unmeasured` : "complete";
+}
+
+/**
+ * Render one metric, and refuse to render it as an improvement when either
+ * side of the comparison is partial.
+ *
+ * "1034 to 0" is a claim about a fix. It is only true if both runs actually
+ * measured the thing. On a project whose every route 500s, both sides record 0
+ * because nothing ran, and this used to print that as a clean sweep.
+ */
+export function metric(before, after, k) {
+  const cb = coverageOf(before, k);
+  const ca = after ? coverageOf(after, k) : null;
+  // "unrecorded" is an audit written before coverage was tracked. That is not
+  // the same claim as "we measured and came up short", so its numbers are still
+  // printed; `coverageNote` flags the whole line as needing a re-sweep.
+  const partial = (c) => c !== "complete" && c !== "unrecorded";
+  if (!after) return partial(cb) ? `partial (${cb})` : `${before[k]}`;
+  if (partial(cb) || partial(ca)) return `not comparable (before ${cb}, after ${ca})`;
+  return after[k] !== before[k] ? `${before[k]} to ${after[k]}` : `${after[k]}`;
+}
+
+/** Appended once per line when either side predates coverage tracking. */
+export function coverageNote(before, after) {
+  const stale = (t) => t && !t.coverage;
+  return stale(before) || stale(after) ? " (coverage unrecorded, re-sweep to confirm)" : "";
+}
+
 /** One line of summary the hub and HANDOVER.md both use. */
 export function summarise(entry) {
   if (!entry) return [];
@@ -166,9 +212,9 @@ export function summarise(entry) {
     // that measures clean keeps looking like outstanding work.
     const s = entry.sweep;
     const a = entry.sweepAfter && entry.sweepAfter.booted !== false ? entry.sweepAfter : null;
-    const cell = (k) => (a && a[k] !== s[k] ? `${s[k]} to ${a[k]}` : `${(a || s)[k]}`);
+    const cell = (k) => metric(s, a, k);
     lines.push(
-      `sweep: ${s.routes} routes, ${cell("consoleErrors")} errors, ${cell("overflow")} overflow, ${cell("contrast")} contrast`
+      `sweep: ${s.routes} routes, ${cell("consoleErrors")} errors, ${cell("overflow")} overflow, ${cell("contrast")} contrast${coverageNote(s, a)}`
     );
   }
   if (entry.tierC.length) {

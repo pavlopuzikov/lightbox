@@ -57,6 +57,30 @@ test("a corrupt or missing file starts empty and the parent directory is created
   clearInterval(b.timer);
 });
 
+const CHECKS = ["console", "requests", "overflow", "contrast", "axe", "meta", "focus", "motion"];
+
+/** Coverage saying every check ran on every cell. */
+const FULL = (cells = 3) => ({
+  cells,
+  loaded: cells,
+  failedLoads: 0,
+  axeErrors: 0,
+  unreadableSheetCells: 0,
+  complete: true,
+  byCheck: Object.fromEntries(CHECKS.map((k) => [k, { measured: cells, unmeasured: 0 }])),
+});
+
+/** Coverage saying nothing loaded, which is what a dead server produces. */
+const NONE = (cells = 3) => ({
+  cells,
+  loaded: 0,
+  failedLoads: cells,
+  axeErrors: 0,
+  unreadableSheetCells: 0,
+  complete: false,
+  byCheck: Object.fromEntries(CHECKS.map((k) => [k, { measured: 0, unmeasured: cells }])),
+});
+
 test("summarise says only what is there", () => {
   assert.deepEqual(summarise(null), []);
   assert.deepEqual(summarise({ ...EMPTY }), []);
@@ -64,7 +88,7 @@ test("summarise says only what is there", () => {
     ...EMPTY,
     branch: "audit/front-end-2026-09",
     commits: [{ sha: "1", subject: "a" }],
-    sweep: { routes: 12, consoleErrors: 0, overflow: 2, contrast: 1 },
+    sweep: { routes: 12, consoleErrors: 0, overflow: 2, contrast: 1, coverage: FULL(12) },
     tierC: [{}, {}, {}],
   });
   assert.deepEqual(lines, [
@@ -143,8 +167,8 @@ test("a status is kept when the script refreshes the entry, and junk never lands
 });
 
 test("summarise reports where the sweep ended up, not where it started", () => {
-  const before = { routes: 3, consoleErrors: 0, overflow: 1, contrast: 95 };
-  const after = { booted: true, routes: 3, consoleErrors: 0, overflow: 0, contrast: 0 };
+  const before = { routes: 3, consoleErrors: 0, overflow: 1, contrast: 95, coverage: FULL() };
+  const after = { booted: true, routes: 3, consoleErrors: 0, overflow: 0, contrast: 0, coverage: FULL() };
 
   const only = summarise({ ...EMPTY, sweep: before });
   assert.match(only.join(" "), /3 routes, 0 errors, 1 overflow, 95 contrast/);
@@ -157,4 +181,33 @@ test("summarise reports where the sweep ended up, not where it started", () => {
 
   const dead = summarise({ ...EMPTY, sweep: { booted: false, error: "port in use" } });
   assert.deepEqual(dead, ["did not boot: port in use"]);
+});
+
+test("a sweep that measured nothing never reads as an improvement", () => {
+  // The failure this exists for: off-plan-selling's first audit had 36 of 36
+  // loads fail and recorded contrast 0. Against a later clean run that also
+  // read 0, the handover line said "0 contrast" and looked like a passing
+  // project. Neither number was a measurement.
+  const before = { routes: 3, consoleErrors: 0, overflow: 0, contrast: 0, coverage: NONE() };
+  const after = { booted: true, routes: 3, consoleErrors: 0, overflow: 0, contrast: 0, coverage: FULL() };
+
+  const line = summarise({ ...EMPTY, sweep: before, sweepAfter: after }).join(" ");
+  assert.match(line, /not comparable/);
+  assert.doesNotMatch(line, /0 to 0/);
+  assert.match(line, /3\/3 unmeasured/, "it says how much was missed, not just that something was");
+
+  // And on its own, a dead sweep does not get to report a count either.
+  const alone = summarise({ ...EMPTY, sweep: before }).join(" ");
+  assert.match(alone, /partial \(3\/3 unmeasured\)/);
+  assert.doesNotMatch(alone, /, 0 contrast/);
+});
+
+test("an audit written before coverage was tracked keeps its numbers and is flagged", () => {
+  // Every audit on disk when coverage landed has no coverage block. Blanking
+  // those would throw away real measurements; asserting them silently would be
+  // the same mistake in the other direction.
+  const before = { routes: 3, consoleErrors: 0, overflow: 1, contrast: 95 };
+  const line = summarise({ ...EMPTY, sweep: before }).join(" ");
+  assert.match(line, /1 overflow, 95 contrast/);
+  assert.match(line, /coverage unrecorded, re-sweep to confirm/);
 });

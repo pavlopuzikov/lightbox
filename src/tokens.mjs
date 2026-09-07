@@ -45,11 +45,16 @@ export function stylesheets(dir, depth = 0, acc = []) {
 /**
  * Pull `--token` / value pairs out of the markdown tables.
  *
- * The table shape varies a little across repos (Hex vs Value in the header, a
- * parenthetical after the token name in some of them), so the token is taken
- * from the first cell and the value from whichever of the next two cells looks
- * like a value. A cell like "(see globals.css)" is a deliberate deferral, not a
- * value, and is skipped rather than reported as drift.
+ * The table shape varies between projects (Hex vs Value in the header, a
+ * parenthetical after the token name in some), so the token is taken from the
+ * first cell and the value from whichever of the next two cells looks like a
+ * value. A cell like "(see globals.css)" is a deliberate deferral, not a value,
+ * and is skipped rather than reported as drift.
+ *
+ * Skipping is the dangerous outcome here, because an unparsed row and a
+ * matching row are both silence. So every skipped row is recorded on the
+ * returned Map as `.skipped`, and the caller reports them rather than counting
+ * them as passes.
  */
 /**
  * Expand "rgba(255,255,255,.035 / .06)" into one full value per half, by taking
@@ -64,6 +69,7 @@ function splitPaired(value, inner) {
 
 export function documented(md) {
   const out = new Map();
+  const skipped = [];
   for (const line of md.split(/\r?\n/)) {
     if (!line.startsWith("|")) continue;
     const cells = line.split("|").slice(1, -1).map((c) => c.trim());
@@ -74,6 +80,7 @@ export function documented(md) {
     // checked, rather than testing the first name against the whole cell.
     const names = [...cells[0].matchAll(/`(--[a-z0-9-]+)`/gi)].map((m) => m[1]);
     if (names.length === 0) continue;
+    let took = false;
     for (const cell of cells.slice(1, 3)) {
       // The value may carry a trailing gloss: "`#C8A96E` (gold)". Requiring the
       // backticks to be the whole cell silently skipped that row, and skipping
@@ -91,9 +98,12 @@ export function documented(md) {
       } else {
         for (const n of names) out.set(n, value);
       }
+      took = true;
       break;
     }
+    if (!took) skipped.push({ names, cells: cells.slice(1, 3) });
   }
+  out.skipped = skipped;
   return out;
 }
 
@@ -165,11 +175,17 @@ export function check(key, dir) {
   const mdPath = ["DESIGN.md", path.join("docs", "DESIGN.md")]
     .map((p) => path.join(dir, p))
     .find((p) => fs.existsSync(p));
-  if (!mdPath) return null;
+  if (!mdPath) return { key, dir, doc: null, unchecked: "no DESIGN.md or docs/DESIGN.md" };
 
   const doc = documented(fs.readFileSync(mdPath, "utf8"));
-  if (doc.size === 0) return { key, dir, doc: path.relative(dir, mdPath), skipped: "no token table" };
+  const skippedRows = doc.skipped || [];
+  if (doc.size === 0) {
+    return { key, dir, doc: path.relative(dir, mdPath), unchecked: "DESIGN.md has no parseable token table", skippedRows };
+  }
 
+  // No guard on an empty stylesheet list: with nothing defined, every
+  // documented token reports as missing, which is loud. Silence is the failure
+  // mode worth guarding against, and this is not one.
   const css = defined(stylesheets(dir));
 
   // Follow aliases before comparing. innovation-portal defines `--bg` as
@@ -207,5 +223,5 @@ export function check(key, dir) {
   }
   const undocumented = [...css.keys()].filter((n) => !doc.has(n));
 
-  return { key, dir, doc: path.relative(dir, mdPath), documented: doc.size, definedCount: css.size, stale, missing, undocumented };
+  return { key, dir, doc: path.relative(dir, mdPath), documented: doc.size, definedCount: css.size, stale, missing, undocumented, skippedRows };
 }

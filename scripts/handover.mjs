@@ -18,7 +18,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { loadConfig, buildCatalogue } from "../src/catalogue.mjs";
-import { Handover, summarise } from "../src/handover.mjs";
+import { Handover, summarise, metric } from "../src/handover.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.dirname(HERE);
@@ -139,8 +139,15 @@ async function main() {
     if (e.sweep && e.sweep.booted !== false) {
       const s = e.sweep;
       const a = e.sweepAfter && e.sweepAfter.booted !== false ? e.sweepAfter : null;
-      const cell = (k) => (a ? `${s[k]} -> ${a[k]}` : `${s[k]}`);
+      const cell = (k) => metric(s, a, k);
       lines.push(`Sweep: routes ${s.routes}, console errors ${cell("consoleErrors")}, failed requests ${cell("failedRequests")}, overflow ${cell("overflow")}, contrast ${cell("contrast")}, axe serious ${cell("axeSerious")}, meta ${cell("meta")}, focus ${cell("focus")}, motion ${cell("motion")}`);
+      const cov = (t, label) => {
+        if (!t) return null;
+        if (!t.coverage) return `${label}: unrecorded, written before coverage was tracked`;
+        if (t.coverage.complete) return `${label}: complete, ${t.coverage.cells} cells`;
+        return `${label}: INCOMPLETE, ${t.coverage.loaded}/${t.coverage.cells} cells loaded${t.coverage.axeErrors ? `, axe threw on ${t.coverage.axeErrors}` : ""}${t.coverage.unreadableSheetCells ? `, ${t.coverage.unreadableSheetCells} with unreadable stylesheets` : ""}`;
+      };
+      lines.push(`Coverage: ${[cov(s, "before"), cov(a, "after")].filter(Boolean).join("  ")}`);
     }
     if (e.lighthouse) {
       const f = (x) => (x ? `${x.seo}/${x.a11y}/${x.bp}/${x.agentic}` : "not run");

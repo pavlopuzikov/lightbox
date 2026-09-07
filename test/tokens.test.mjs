@@ -85,14 +85,16 @@ test("the same colour spelled two ways compares equal", () => {
   assert.ok(!same("#0A0A0A", "#0D0B09"));
 });
 
-test("a DESIGN.md with no token table is skipped rather than failed", () => {
+test("a DESIGN.md with no token table reports as unchecked, not as a pass", () => {
   const dir = project("# Test\n\nProse only, no table.\n", { "app/globals.css": ":root { --bg: #000; }" });
-  assert.equal(check("t", dir).skipped, "no token table");
+  assert.equal(check("t", dir).unchecked, "DESIGN.md has no parseable token table");
 });
 
-test("a project with no DESIGN.md returns nothing to report", () => {
+test("a project with no DESIGN.md reports as unchecked, not as nothing to report", () => {
+  // It used to return null and the CLI dropped the project, so a run where no
+  // configured directory had a DESIGN.md printed "0 tokens drifted" and exited 0.
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lightbox-tokens-"));
-  assert.equal(check("t", dir), null);
+  assert.equal(check("t", dir).unchecked, "no DESIGN.md or docs/DESIGN.md");
 });
 
 test("node_modules is not scanned for stylesheets", () => {

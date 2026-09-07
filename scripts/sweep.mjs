@@ -403,11 +403,19 @@ function dedupe(list) {
  * ------------------------------------------------------------------ */
 
 export function checksOf(w) {
-  if (!w || w.error) return { loaded: false };
+  if (!w || w.error) return { loaded: false, axeMeasured: false, motionMeasured: false };
   const meta = w.meta || {};
   const focus = w.focus || {};
   const motion = w.motion || {};
   const declared = (motion.keyframes || 0) + (motion.animated || 0) + (motion.transitions || 0) > 0;
+  // axe either ran or it threw, and a throw is recorded with zeroed counts.
+  // Reading those zeros back as a result is how a crashed scan came to look
+  // exactly like a clean page.
+  const axeMeasured = !!w.axe && !w.axe.error;
+  // A stylesheet the page cannot read (cross-origin, no CORS header) is a
+  // stylesheet whose keyframes and transitions were never counted, so
+  // "declares no motion" is not something this cell is entitled to say.
+  const motionMeasured = (motion.unreadableSheets || 0) === 0;
   return {
     loaded: true,
     status: w.status,
@@ -420,8 +428,10 @@ export function checksOf(w) {
     // superseded prefetch) is not a failure of the page.
     failedRequests: (w.requests?.failed || []).filter((q) => !/ERR_ABORTED/.test(q.error || "")).length + (w.requests?.bad?.length || 0),
     overflow: !!w.overflow?.over,
-    contrast: w.axe?.contrast || 0,
-    axeSerious: w.axe?.seriousOrCritical || 0,
+    axeMeasured,
+    axeError: w.axe?.error || null,
+    contrast: axeMeasured ? w.axe.contrast || 0 : null,
+    axeSerious: axeMeasured ? w.axe.seriousOrCritical || 0 : null,
     metaOk: !!(meta.lang && meta.title && meta.description > 0 && meta.viewport && meta.h1 === 1),
     metaMissing: [
       !meta.lang && "lang",
@@ -432,12 +442,51 @@ export function checksOf(w) {
     ].filter(Boolean),
     focusOk: !(focus.positiveTabindex > 0) && (!focus.first?.landed || focus.first.visible || focus.first.focusVisible),
     motionDeclared: declared,
-    motionOk: !declared || (motion.reducedMotionRule && (motion.runningUnderReduce || 0) === 0),
+    motionMeasured,
+    unreadableSheets: motion.unreadableSheets || 0,
+    motionOk: !motionMeasured ? null : !declared || (motion.reducedMotionRule && (motion.runningUnderReduce || 0) === 0),
   };
 }
 
-function totalsOf(routes, widths) {
+const CHECKS = ["console", "requests", "overflow", "contrast", "axe", "meta", "focus", "motion"];
+
+/**
+ * A one-line verdict on whether the numbers beside it are measurements.
+ *
+ * The failure this exists for: a run where every route 500s produces
+ * `contrast 0`, which is the same string a clean page produces. Nothing in the
+ * output distinguished them, so a dead project read as a passing one.
+ */
+export function coverageLine(t) {
+  const cov = t && t.coverage;
+  if (!cov) return "coverage: unknown, this audit was written before coverage was recorded";
+  if (cov.complete) return `coverage: complete, ${cov.cells} cells`;
+  const parts = CHECKS.filter((k) => cov.byCheck[k] && cov.byCheck[k].unmeasured)
+    .map((k) => `${k} ${cov.byCheck[k].unmeasured}/${cov.byCheck[k].measured + cov.byCheck[k].unmeasured}`);
+  const why = [
+    cov.failedLoads ? `${cov.failedLoads} loads failed` : "",
+    cov.axeErrors ? `axe threw on ${cov.axeErrors} cells` : "",
+    cov.unreadableSheetCells ? `${cov.unreadableSheetCells} cells had unreadable stylesheets` : "",
+  ].filter(Boolean).join(", ");
+  return `coverage: INCOMPLETE. Unmeasured cells: ${parts.join(", ")}${why ? ` (${why})` : ""}. A zero on those checks is not a measurement.`;
+}
+
+/** `12/36 unmeasured`, or `complete`. For table cells. */
+export function coverageShort(t) {
+  const cov = t && t.coverage;
+  if (!cov) return "unknown";
+  if (cov.complete) return "complete";
+  const worst = CHECKS.map((k) => cov.byCheck[k]).filter(Boolean).reduce((a, b) => (b.unmeasured > a.unmeasured ? b : a));
+  return `${worst.unmeasured}/${worst.measured + worst.unmeasured} unmeasured`;
+}
+
+export function totalsOf(routes, widths) {
   const t = { routes: routes.length, loads: 0, failedLoads: 0, redirects: 0, consoleErrors: 0, failedRequests: 0, overflow: 0, contrast: 0, axeSerious: 0, meta: 0, focus: 0, motion: 0 };
+  const byCheck = {};
+  for (const k of CHECKS) byCheck[k] = { measured: 0, unmeasured: 0 };
+  let axeErrors = 0;
+  let unreadableSheetCells = 0;
+
   for (const r of routes) {
     if (r.skipped) continue;
     let metaFail = false;
@@ -445,21 +494,53 @@ function totalsOf(routes, widths) {
       const c = checksOf(r.widths[w]);
       t.loads++;
       if (!c.loaded || !c.ok) {
+        // Nothing was measured on this cell. Every check has to say so,
+        // rather than each of them contributing a zero to the totals.
         t.failedLoads++;
+        for (const k of CHECKS) byCheck[k].unmeasured++;
         continue;
       }
       if (c.redirected) t.redirects++;
       t.consoleErrors += c.consoleErrors;
+      byCheck.console.measured++;
       t.failedRequests += c.failedRequests;
+      byCheck.requests.measured++;
       if (c.overflow) t.overflow++;
-      t.contrast += c.contrast;
-      t.axeSerious += c.axeSerious;
+      byCheck.overflow.measured++;
+      if (c.axeMeasured) {
+        t.contrast += c.contrast;
+        t.axeSerious += c.axeSerious;
+        byCheck.contrast.measured++;
+        byCheck.axe.measured++;
+      } else {
+        byCheck.contrast.unmeasured++;
+        byCheck.axe.unmeasured++;
+        axeErrors++;
+      }
       if (!c.metaOk) metaFail = true;
+      byCheck.meta.measured++;
       if (!c.focusOk) t.focus++;
-      if (!c.motionOk) t.motion++;
+      byCheck.focus.measured++;
+      if (c.motionMeasured) {
+        if (!c.motionOk) t.motion++;
+        byCheck.motion.measured++;
+      } else {
+        byCheck.motion.unmeasured++;
+        unreadableSheetCells++;
+      }
     }
     if (metaFail) t.meta++;
   }
+
+  t.coverage = {
+    cells: t.loads,
+    loaded: t.loads - t.failedLoads,
+    failedLoads: t.failedLoads,
+    axeErrors,
+    unreadableSheetCells,
+    byCheck,
+    complete: t.loads > 0 && CHECKS.every((k) => byCheck[k].unmeasured === 0),
+  };
   return t;
 }
 
@@ -485,6 +566,8 @@ async function run() {
     fs.mkdirSync(path.dirname(out), { recursive: true });
     fs.writeFileSync(out, JSON.stringify(result, null, 2));
     console.log(`${key}: did not boot (${st.state}). ${result.bootError}`);
+    console.log(coverageLine(result.totals));
+    if (!args["allow-partial"]) process.exitCode = 2;
     return;
   }
 
@@ -537,11 +620,13 @@ async function run() {
           c.consoleErrors ? `err ${c.consoleErrors}` : "",
           c.failedRequests ? `req ${c.failedRequests}` : "",
           c.overflow ? `overflow +${r.overflow.scrollWidth - r.overflow.innerWidth}` : "",
+          c.loaded && c.ok && !c.axeMeasured ? `contrast/axe UNMEASURED (${trunc(c.axeError || "axe did not run", 60)})` : "",
           c.contrast ? `contrast ${c.contrast}` : "",
           c.axeSerious ? `axe ${c.axeSerious}` : "",
           c.loaded && !c.metaOk ? `meta ${c.metaMissing.join(",")}` : "",
           c.loaded && !c.focusOk ? "focus" : "",
-          c.loaded && !c.motionOk ? "motion" : "",
+          c.loaded && c.ok && !c.motionMeasured ? `motion UNMEASURED (${c.unreadableSheets} unreadable sheets)` : "",
+          c.motionOk === false ? "motion" : "",
         ].filter(Boolean);
         console.log(`${key} ${String(width).padStart(4)} ${route.path.padEnd(44)} ${String(r.ms).padStart(6)}ms  ${flags.join("  ") || "ok"}${r.error ? "  " + r.error : ""}`);
       }
@@ -572,11 +657,16 @@ async function run() {
   fs.writeFileSync(out, JSON.stringify(result, null, 2));
   const t = result.totals;
   console.log(`\n${key}: ${t.routes} routes, ${t.loads} loads (${t.failedLoads} failed), errors ${t.consoleErrors}, requests ${t.failedRequests}, overflow ${t.overflow}, contrast ${t.contrast}, axe ${t.axeSerious}, meta ${t.meta}, focus ${t.focus}, motion ${t.motion}. ${Math.round(result.tookMs / 1000)}s.`);
+  console.log(coverageLine(t));
   console.log(`wrote ${path.relative(process.cwd(), out)}`);
 
   if (args.stop && project.kind === "node") {
     await fetch(`${hub}/api/stop/${key}`, { method: "POST" }).catch(() => {});
   }
+
+  // 2, not 1: `diff` owns exit 1 and means "this got worse". This means
+  // "do not read these numbers as a result yet".
+  if (!t.coverage.complete && !args["allow-partial"]) process.exitCode = 2;
 }
 
 /* ------------------------------------------------------------------ *
@@ -592,6 +682,7 @@ function diff() {
   const byPath = new Map(before.routes.map((r) => [r.path, r]));
   const worse = [];
   const better = [];
+  const unmeasured = [];
   const shots = [];
 
   for (const r of after.routes) {
@@ -600,8 +691,14 @@ function diff() {
     for (const w of after.widths) {
       const ca = checksOf(r.widths[w]);
       const cb = checksOf(b.widths?.[w]);
-      if (!cb.loaded) continue;
       const cell = `${r.path}@${w}`;
+      if (!cb.loaded) {
+        // No baseline for this cell, so nothing here can be called a
+        // regression or a fix. Dropping it silently is what made a run
+        // against a dead server look like a clean diff.
+        unmeasured.push(`${cell} every check (no baseline: the before run did not load this cell)`);
+        continue;
+      }
       const cmp = (name, badA, badB, detail) => {
         if (badA && !badB) worse.push(`${cell} ${name}${detail ? " " + detail : ""}`);
         if (!badA && badB) better.push(`${cell} ${name}`);
@@ -613,13 +710,20 @@ function diff() {
       cmp("requests", ca.failedRequests > cb.failedRequests, false, `${cb.failedRequests} -> ${ca.failedRequests}`);
       if (ca.failedRequests < cb.failedRequests) better.push(`${cell} requests ${cb.failedRequests} -> ${ca.failedRequests}`);
       cmp("overflow", ca.overflow, cb.overflow);
-      cmp("contrast", ca.contrast > cb.contrast, false, `${cb.contrast} -> ${ca.contrast}`);
-      if (ca.contrast < cb.contrast) better.push(`${cell} contrast ${cb.contrast} -> ${ca.contrast}`);
-      cmp("axe", ca.axeSerious > cb.axeSerious, false, `${cb.axeSerious} -> ${ca.axeSerious}`);
-      if (ca.axeSerious < cb.axeSerious) better.push(`${cell} axe ${cb.axeSerious} -> ${ca.axeSerious}`);
+      // Comparing a measured count against an unmeasured one manufactures a
+      // verdict out of a scan that never ran. Say so instead.
+      if (ca.axeMeasured && cb.axeMeasured) {
+        cmp("contrast", ca.contrast > cb.contrast, false, `${cb.contrast} -> ${ca.contrast}`);
+        if (ca.contrast < cb.contrast) better.push(`${cell} contrast ${cb.contrast} -> ${ca.contrast}`);
+        cmp("axe", ca.axeSerious > cb.axeSerious, false, `${cb.axeSerious} -> ${ca.axeSerious}`);
+        if (ca.axeSerious < cb.axeSerious) better.push(`${cell} axe ${cb.axeSerious} -> ${ca.axeSerious}`);
+      } else {
+        unmeasured.push(`${cell} contrast/axe (${!cb.axeMeasured ? "before" : "after"}: ${trunc((!cb.axeMeasured ? cb.axeError : ca.axeError) || "axe did not run", 60)})`);
+      }
       cmp("meta", !ca.metaOk, !cb.metaOk, ca.metaMissing.join(","));
       cmp("focus", !ca.focusOk, !cb.focusOk);
-      cmp("motion", !ca.motionOk, !cb.motionOk);
+      if (ca.motionMeasured && cb.motionMeasured) cmp("motion", !ca.motionOk, !cb.motionOk);
+      else unmeasured.push(`${cell} motion (unreadable stylesheets)`);
       const sa = r.widths[w]?.sha256;
       const sb = b.widths[w]?.sha256;
       if (sa && sb && sa !== sb) shots.push({ cell, noisy: noisy.has(r.path), before: b.widths[w].shot, after: r.widths[w].shot });
@@ -631,6 +735,10 @@ function diff() {
   for (const l of worse) console.log("  " + l);
   console.log(`\nbetter (${better.length})`);
   for (const l of better) console.log("  " + l);
+  console.log(`\nnot comparable (${unmeasured.length})`);
+  for (const l of unmeasured) console.log("  " + l);
+  console.log(`\nbefore ${coverageLine(before.totals)}`);
+  console.log(`after  ${coverageLine(after.totals)}`);
   const real = shots.filter((s) => !s.noisy);
   console.log(`\nscreenshots changed (${shots.length}, ${real.length} on routes not declared noisy)`);
   for (const s of shots) console.log(`  ${s.cell}${s.noisy ? " (noisy)" : ""}  ${s.before}  ${s.after}`);
@@ -650,13 +758,14 @@ function summary() {
     const t = j.totals || {};
     rows.push(
       j.booted === false
-        ? `| ${j.key} | did not boot | ${(j.bootError || "").replace(/\|/g, "/").slice(0, 80)} | | | | | | | | |`
-        : `| ${j.key} | ${t.routes} | ${t.loads - t.failedLoads}/${t.loads} | ${t.consoleErrors} | ${t.failedRequests} | ${t.overflow} | ${t.contrast} | ${t.axeSerious} | ${t.meta} | ${t.focus} | ${t.motion} |`
+        ? `| ${j.key} | did not boot | ${(j.bootError || "").replace(/\|/g, "/").slice(0, 80)} | | | | | | | | | nothing measured |`
+        : `| ${j.key} | ${t.routes} | ${t.loads - t.failedLoads}/${t.loads} | ${t.consoleErrors} | ${t.failedRequests} | ${t.overflow} | ${t.contrast} | ${t.axeSerious} | ${t.meta} | ${t.focus} | ${t.motion} | ${coverageShort(t)} |`
     );
   }
-  console.log("| key | routes | loaded | console errors | failed requests | overflow | contrast nodes | axe serious | meta (routes) | focus | motion |");
-  console.log("|---|---|---|---|---|---|---|---|---|---|---|");
+  console.log("| key | routes | loaded | console errors | failed requests | overflow | contrast nodes | axe serious | meta (routes) | focus | motion | coverage |");
+  console.log("|---|---|---|---|---|---|---|---|---|---|---|---|");
   for (const r of rows) console.log(r);
+  console.log("\nA number in a row whose coverage is not `complete` is a partial count. The checks it could not run contributed nothing, not zero.");
 }
 
 /* ------------------------------------------------------------------ *
