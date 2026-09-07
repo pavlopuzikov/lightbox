@@ -15,7 +15,7 @@
 import fs from "node:fs";
 import http from "node:http";
 import { summarise, STATUSES } from "./handover.mjs";
-import { familiesOf, routesFor } from "./routes.mjs";
+import { familiesOf, routesFor, clearRouteCache } from "./routes.mjs";
 
 const esc = (s) =>
   String(s ?? "")
@@ -73,6 +73,8 @@ background:linear-gradient(var(--teal),var(--teal)) 0 0/50% 100% no-repeat}
 .acts button.text.ok{color:var(--muted);cursor:default}
 .err{margin:6px 0 0;color:var(--fail);font-size:12.5px;white-space:pre-wrap}
 .err:empty{display:none}
+.adopted{margin:6px 0 0;color:var(--muted);font-size:12.5px;line-height:1.45}
+.adopted:empty{display:none}
 .num{font:12.5px/1.6 var(--mono);color:var(--ink-2);font-variant-numeric:tabular-nums;margin-top:3px}
 .num b{font-weight:600;color:var(--ink)}
 .num .m{color:var(--muted)}
@@ -146,7 +148,13 @@ function row(p, st, routes, done, hand) {
   <div>
     ${p.note ? `<p class="note">${esc(p.note)}</p>` : ""}
     ${missing ? `<p class="err">Directory not found: ${esc(p.dir)}</p>` : ""}
+    ${
+      p.portConflict
+        ? `<p class="err">lightbox could not bind the review port :${p.port}, so it is not serving this project. The link is withheld because whatever answers there is not lightbox.</p>`
+        : ""
+    }
     <p class="err" data-err="${key}">${esc(st.error || "")}</p>
+    <p class="adopted" data-adopted="${key}">${esc(st.adopted ? st.note || "Adopted an existing server on this port." : "")}</p>
     <p class="hand" data-hand="${key}">${esc(handLine(hand))}</p>
   </div>
   <div class="num"><b data-done="${key}">${done}</b> <span class="m">of</span> ${routes.length} <span class="m">pages</span>${
@@ -160,13 +168,14 @@ function row(p, st, routes, done, hand) {
       : ""
   }</div>
   <div class="acts">
-    ${missing ? "" : `<a class="open" href="/go/${key}">Open</a>`}
+    ${missing || p.portConflict ? "" : `<a class="open" href="/go/${key}">Open</a>`}
     ${
       node
         ? `<button class="text quiet" data-act="install" data-key="${key}"${
             needsInstall ? "" : " hidden"
           }>npm install</button>
-    <button class="text quiet" data-act="stop" data-key="${key}"${running ? "" : " hidden"}>stop</button>`
+    <button class="text quiet" data-act="stop" data-key="${key}"${running ? "" : " hidden"}>stop</button>
+    <button class="text quiet" data-act="restart" data-key="${key}"${running ? "" : " hidden"}>restart</button>`
         : ""
     }
     <button class="text quiet" data-toggle="pages">${routes.length} pages</button>
@@ -252,7 +261,8 @@ document.addEventListener('click',function(e){
   if(t){t.closest('.row').classList.toggle('open-'+t.dataset.toggle);return}
   var b=e.target.closest('button[data-act]');
   if(!b)return;
-  b.disabled=true;b.textContent=b.dataset.act==='install'?'installing…':b.dataset.act==='approve'?'approving…':b.dataset.act+'ping…';
+  var BUSY={install:'installing…',approve:'approving…',stop:'stopping…',restart:'restarting…'};
+  b.disabled=true;b.textContent=BUSY[b.dataset.act]||(b.dataset.act+'…');
   act(b.dataset.key,b.dataset.act);
 });
 document.addEventListener('change',function(e){
@@ -287,8 +297,12 @@ async function refresh(){
       var log=q('pre[data-log="'+k+'"]');
       if(log&&st.log)log.textContent=st.log;
       var running=st.state==='ready'||st.state==='starting';
+      var ad=q('[data-adopted="'+k+'"]');
+      if(ad)ad.textContent=st.adopted?(st.note||'Adopted an existing server on this port.'):'';
       var stop=row.querySelector('button[data-act="stop"]');
       if(stop){stop.hidden=!running;if(!running){stop.disabled=false;stop.textContent='stop'}}
+      var rst=row.querySelector('button[data-act="restart"]');
+      if(rst){rst.hidden=!running;if(!running){rst.disabled=false;rst.textContent='restart'}}
       var inst=row.querySelector('button[data-act="install"]');
       if(inst&&st.hasModules){inst.hidden=true}
       var hp=q('[data-hand="'+k+'"]');
@@ -350,7 +364,15 @@ const FAVICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
  * ------------------------------------------------------------------ */
 
 function bridgeStatus(bridge) {
-  const target = new URL("/health", bridge);
+  // No bridge configured is "the bridge is down", not a crash. Left to throw,
+  // this rejected inside the request handler and the socket hung open with no
+  // status line, which looks like a wedged hub rather than a missing setting.
+  let target;
+  try {
+    target = new URL("/health", bridge);
+  } catch {
+    return Promise.resolve(null);
+  }
   return new Promise((resolve) => {
     const r = http.request(
       { host: target.hostname, port: target.port, path: target.pathname, timeout: 700 },
@@ -384,10 +406,25 @@ export function createHubServer(ctx) {
     const p = url.pathname;
 
     const send = (code, type, body) => {
+      if (res.headersSent) return;
       res.writeHead(code, { "content-type": type, "cache-control": "no-store" });
       res.end(body);
     };
 
+    // The handler is async, so anything it throws becomes an unhandled
+    // rejection and the socket is left open with no status line. A hung tab is
+    // the least informative way to report a bug in here; say 500 instead.
+    try {
+      await route(ctx, byKey, req, res, url, p, send);
+    } catch (e) {
+      send(500, "text/plain", `lightbox hub error: ${e && e.message}`);
+    }
+  });
+}
+
+async function route(ctx, byKey, req, res, url, p, send) {
+  const { catalogue, supervisor, progress, handover } = ctx;
+  {
     if (p === "/" || p === "/index.html") {
       return send(200, "text/html; charset=utf-8", page(ctx));
     }
@@ -452,7 +489,7 @@ export function createHubServer(ctx) {
     }
 
     if (req.method === "POST") {
-      const m = /^\/api\/(start|stop|install|stopall|approve|unapprove|status)(?:\/(.+))?$/.exec(p);
+      const m = /^\/api\/(start|stop|restart|install|stopall|approve|unapprove|status)(?:\/(.+))?$/.exec(p);
       if (m) {
         const [, action, key] = m;
         if (action === "stopall") {
@@ -485,6 +522,13 @@ export function createHubServer(ctx) {
         }
         if (action === "start") supervisor.start(project).catch(() => {});
         if (action === "stop") await supervisor.stop(project).catch(() => {});
+        if (action === "restart") {
+          // A page added while `serve` was running never showed up, because
+          // the route list is cached for the life of the process and nothing
+          // ever invalidated it. A restart is the natural moment to re-read.
+          clearRouteCache(project.key);
+          supervisor.restart(project).catch(() => {});
+        }
         if (action === "install")
           supervisor
             .install(project)
@@ -497,5 +541,5 @@ export function createHubServer(ctx) {
     }
 
     send(404, "text/plain", "not found");
-  });
+  }
 }

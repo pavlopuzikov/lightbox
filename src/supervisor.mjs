@@ -20,6 +20,10 @@ const WIN = process.platform === "win32";
 const START_TIMEOUT_MS = 180_000;
 const INSTALL_TIMEOUT_MS = 900_000;
 const LOG_TAIL = 400;
+const HEALTH_INTERVAL_MS = 5_000;
+/* Two consecutive misses before calling a server dead. A dev server that
+   rebinds its port on a config change would otherwise flap to failed. */
+const HEALTH_MISSES = 2;
 /* Vite 5+ on Node 17+ binds only the IPv6 loopback by default, so a probe of
    127.0.0.1 alone reports a running server as absent. Try both. */
 const LOOPBACKS = ["127.0.0.1", "::1"];
@@ -147,10 +151,12 @@ function commandFor(project, port) {
  * ------------------------------------------------------------------ */
 
 export class Supervisor {
-  constructor({ logDir }) {
+  constructor({ logDir, healthIntervalMs = HEALTH_INTERVAL_MS }) {
     this.logDir = logDir;
     /** @type {Map<string, {state:string, child:any, log:string[], error:string|null, startedAt:number|null}>} */
     this.procs = new Map();
+    this.healthIntervalMs = healthIntervalMs;
+    this.healthTimer = null;
     fs.mkdirSync(logDir, { recursive: true });
   }
 
@@ -162,6 +168,10 @@ export class Supervisor {
         log: [],
         error: null,
         startedAt: null,
+        adopted: false,
+        note: null,
+        upstream: null,
+        healthMisses: 0,
       });
     }
     return this.procs.get(key);
@@ -175,7 +185,57 @@ export class Supervisor {
       startedAt: e.startedAt,
       pid: e.child ? e.child.pid : null,
       host: e.host || null,
+      // Whether lightbox started this server or found it already listening.
+      // An adopted entry has no child, so nothing tells it the process died;
+      // that is what the health check below is for, and a reviewer looking at
+      // a row deserves to know which kind of "ready" they are reading.
+      adopted: !!e.adopted,
+      note: e.note || null,
     };
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Health
+   *
+   * `ready` used to be a latch: one successful TCP connect and the state
+   * stayed ready for the life of the process. For a server lightbox spawned,
+   * the child's `exit` event corrected it. For an adopted one there is no
+   * child and no exit event, so a dev server that died went on reporting
+   * ready while every proxied request returned 503. A sweep run against it
+   * recorded 36 failed loads and called the project clean.
+   * ---------------------------------------------------------------- */
+
+  watchHealth() {
+    if (this.healthTimer) return;
+    this.healthTimer = setInterval(() => {
+      this.checkHealth().catch(() => {});
+    }, this.healthIntervalMs);
+    this.healthTimer.unref?.();
+  }
+
+  stopWatchingHealth() {
+    if (this.healthTimer) clearInterval(this.healthTimer);
+    this.healthTimer = null;
+  }
+
+  async checkHealth() {
+    for (const [key, e] of this.procs) {
+      // Only a settled `ready` is worth probing: `starting` has its own wait
+      // loop and `stopping` is expected to go quiet.
+      if (e.state !== "ready" || !e.upstream) continue;
+      const host = await loopbackOpen(e.upstream, 500);
+      if (host) {
+        e.host = host;
+        e.healthMisses = 0;
+        continue;
+      }
+      if (++e.healthMisses < HEALTH_MISSES) continue;
+      e.state = "failed";
+      e.error = e.adopted
+        ? `Nothing is listening on :${e.upstream} any more. lightbox adopted this server rather than starting it, so there is no exit code to report.`
+        : `Nothing is listening on :${e.upstream} any more.`;
+      this.log(key, `\n=== health check: nothing listening on :${e.upstream}\n`);
+    }
   }
 
   log(key, line) {
@@ -247,7 +307,13 @@ export class Supervisor {
       e.state = "ready";
       e.error = null;
       e.adopted = true;
+      // There is no identity check here and there cannot be a cheap one: a TCP
+      // connect says something answers, not what. So say so on the row rather
+      // than presenting it as this project's dev server.
+      e.note = `Adopted a server already listening on :${project.upstream}. lightbox did not start it and cannot confirm it is this project.`;
       e.host = adoptedOn;
+      e.upstream = project.upstream;
+      e.healthMisses = 0;
       e.startedAt = Date.now();
       this.log(project.key, `\n=== adopted an existing server on :${project.upstream}\n`);
       return "ready";
@@ -269,6 +335,9 @@ export class Supervisor {
     e.state = "starting";
     e.error = null;
     e.adopted = false;
+    e.note = null;
+    e.upstream = project.upstream;
+    e.healthMisses = 0;
     e.startedAt = Date.now();
     this.log(
       project.key,
@@ -332,8 +401,15 @@ export class Supervisor {
     const e = this.entry(project.key);
     const child = e.child;
     if (!child) {
+      // An adopted entry always takes this path, since there is no child to
+      // kill. Clearing the adoption matters: leaving it set made the entry go
+      // on describing itself as adopted after it had been stopped.
       e.state = "stopped";
       e.error = null;
+      e.host = null;
+      e.adopted = false;
+      e.note = null;
+      e.healthMisses = 0;
       return;
     }
     e.state = "stopping";
@@ -359,6 +435,37 @@ export class Supervisor {
     e.host = null;
     e.state = "stopped";
     e.error = null;
+    e.adopted = false;
+    e.note = null;
+    e.healthMisses = 0;
+  }
+
+  /**
+   * Stop and start again.
+   *
+   * An adopted server is the exception: lightbox did not spawn it, `stop` has
+   * no child to kill, and it will still be listening afterwards. Re-adopting
+   * it and reporting "restarted" would be false, so this says what happened
+   * instead.
+   */
+  async restart(project) {
+    const before = this.entry(project.key);
+    const wasAdopted = !!before.adopted && !before.child;
+    await this.stop(project);
+
+    if (wasAdopted && (await loopbackOpen(project.upstream))) {
+      const e = this.entry(project.key);
+      e.state = "ready";
+      e.adopted = true;
+      e.upstream = project.upstream;
+      e.host = await loopbackOpen(project.upstream);
+      e.healthMisses = 0;
+      e.startedAt = Date.now();
+      e.note = `Still listening on :${project.upstream}. lightbox did not start this server, so it was not restarted. Stop it where it was started.`;
+      this.log(project.key, `\n=== restart skipped: adopted server on :${project.upstream} is not ours to kill\n`);
+      return "ready";
+    }
+    return this.start(project);
   }
 
   async stopAll(projects) {

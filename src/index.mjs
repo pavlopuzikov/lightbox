@@ -173,6 +173,8 @@ export async function serve(config, cwd = process.cwd(), opts = {}) {
 
   const catalogue = buildCatalogue(config);
   const supervisor = new Supervisor({ logDir: path.join(stateDir, "logs") });
+  // A dead server must stop reporting ready. See Supervisor.checkHealth.
+  supervisor.watchHealth();
   const progress = new Progress(path.join(stateDir, "progress.json"));
   const handover = new Handover(path.join(stateDir, "handover.json"));
   const inspectCommentPath = resolveInspectComment(config, cwd);
