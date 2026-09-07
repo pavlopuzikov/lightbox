@@ -21,7 +21,7 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { routesFor } from "./routes.mjs";
-import { TOKENS } from "./design.mjs";
+import { TOKENS, rootCss } from "./design.mjs";
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -143,20 +143,17 @@ function autoIndex(dirPath, urlPath, project) {
     .map((e) => {
       const href = path.posix.join(urlPath, e.name) + (e.isDirectory() ? "/" : "");
       const kind = e.isDirectory() ? "dir" : path.extname(e.name).slice(1) || "file";
-      return `<li><a href="${esc(href)}"><span class="k">${esc(kind)}</span>${esc(e.name)}</a></li>`;
+      return `<li><a href="${esc(href)}"><span class="k">${esc(kind)}</span><span class="n">${esc(
+        e.name
+      )}</span></a></li>`;
     })
     .join("");
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(project.name)} ${esc(urlPath)}</title><style>
-body{margin:0;background:#111114;color:#e9e8e4;font:14px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-main{max-width:820px;margin:0 auto;padding:48px 24px}
-h1{font-size:15px;font-weight:600;margin:0 0 4px}p{color:#8d8d97;margin:0 0 28px;font-size:12px}
-ul{list-style:none;margin:0;padding:0;border-top:1px solid #26262b}
-li{border-bottom:1px solid #26262b}
-a{display:flex;gap:12px;padding:9px 4px;color:#cfe4f6;text-decoration:none}
-a:hover{background:#1b1b21}.k{color:#7e7e88;width:56px;flex:none}
-</style></head><body><main><h1>${esc(project.name)}</h1><p>${esc(urlPath)}</p><ul>${rows}</ul></main></body></html>`;
+  return SHELL(
+    `${project.name} ${urlPath}`,
+    `${masthead(`index of ${urlPath}`, project.name)}
+<div class="cols"><span>Kind</span><span>Name</span></div>
+<ul class="idx">${rows}</ul>`
+  );
 }
 
 function serveStatic(req, res, ctx) {
@@ -182,7 +179,7 @@ function serveStatic(req, res, ctx) {
     const clean = full + ".html";
     if (!path.extname(full) && fs.existsSync(clean)) return sendFile(req, res, clean, ctx);
     res.writeHead(404, { "content-type": "text/html; charset=utf-8" });
-    res.end(injectHtml(notFoundPage(project, rel), ctx, req));
+    res.end(injectHtml(notFoundPage(project, rel, ctx), ctx, req));
     return;
   }
 
@@ -413,35 +410,93 @@ function proxyUpgrade(req, socket, head, ctx) {
  * Pages the proxy serves itself
  * ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ *
+ * The proxy's own pages
+ *
+ * Same broadside as the hub, cut down. These are the pages you land on when
+ * something is wrong, so they carry the same stock and the same rules: a
+ * reader who hits a 404 should still know whose chrome they are looking at.
+ * DESIGN.md is the system; nothing below may name a colour.
+ * ------------------------------------------------------------------ */
+
+const PAGE_CSS =
+  rootCss() +
+  `
+body{margin:0;background:var(--paper);color:var(--ink);
+font:14px/1.65 var(--sans);-webkit-font-smoothing:antialiased}
+main{max-width:680px;margin:0 auto;padding:76px 32px 72px}
+.eyebrow{margin:0 0 13px;font:10px/1 var(--mono);text-transform:uppercase;
+letter-spacing:var(--track-micro);color:var(--ink-3)}
+h1{margin:0;font:400 clamp(34px,6vw,54px)/0.94 var(--display);font-stretch:condensed;
+text-transform:uppercase;letter-spacing:var(--track-display)}
+.rule-heavy{height:var(--rule-heavy);background:var(--ink);margin:14px 0 0}
+.band{height:var(--ornament-height);margin:9px 0 0;opacity:.55;
+background-image:var(--ornament);background-repeat:repeat-x;background-position:left center}
+p{margin:22px 0 0;max-width:58ch;font-size:13.5px;color:var(--ink-2)}
+code{padding:1px 5px;background:var(--paper-tint);font:12.5px var(--mono)}
+.err{color:var(--vermilion)}
+.err:empty{display:none}
+
+/* A pressed key on paper is an impression, so the buttons carry a hard offset
+   with no blur and lose it on the way down rather than dimming. */
+.acts{display:flex;flex-wrap:wrap;gap:12px;margin:28px 0 0}
+button,a.btn{appearance:none;display:inline-block;cursor:pointer;text-decoration:none;
+padding:8px 14px;background:var(--paper-2);color:var(--ink);border:2px solid var(--ink);
+box-shadow:3px 3px 0 var(--ink);font:11px/1 var(--mono);text-transform:uppercase;
+letter-spacing:var(--track-caps);
+transition:transform var(--tap) var(--ease),box-shadow var(--tap) var(--ease)}
+button:hover,a.btn:hover{background:var(--paper-tint)}
+button:active,a.btn:active{transform:translate(3px,3px);box-shadow:0 0 0 var(--ink)}
+button[disabled]{cursor:default;color:var(--ink-3);transform:translate(3px,3px);box-shadow:none}
+
+/* Machine output, in the margin, the way the hub sets it. */
+pre{margin:30px 0 0;padding:11px 0 11px 14px;border-left:var(--rule-mid) solid var(--rule-ink);
+overflow:auto;max-height:44vh;white-space:pre-wrap;font:11px/1.7 var(--mono);color:var(--ink-3)}
+
+/* The directory listing is tabular matter, so it is ruled both ways. */
+.cols{display:grid;grid-template-columns:74px 1fr;margin:30px 0 0;padding:0 4px 7px;
+font:9.5px/1.4 var(--mono);text-transform:uppercase;letter-spacing:var(--track-micro);
+color:var(--ink-3);border-bottom:var(--rule-hair) solid var(--rule-ink)}
+.idx{list-style:none;margin:0;padding:0}
+.idx li{border-bottom:var(--rule-hair) solid var(--rule-ink)}
+.idx a{display:grid;grid-template-columns:74px 1fr;align-items:baseline;
+padding:9px 4px;color:var(--ink);text-decoration:none}
+.idx a:hover{background:var(--paper-tint)}
+.idx .k{padding-right:12px;font:9.5px/1.9 var(--mono);text-transform:uppercase;
+letter-spacing:var(--track-micro);color:var(--ink-3)}
+.idx .n{padding-left:12px;border-left:var(--rule-hair) solid var(--rule-ink-2);font-size:13px}
+.idx .n b{font-weight:400}
+
+a:focus-visible,button:focus-visible{outline:var(--rule-mid) solid var(--vermilion);
+outline-offset:3px}
+@media (prefers-reduced-motion:reduce){*{transition:none}}
+`;
+
+/* Every page opens the same way: who is speaking, then the title, then the
+   rule that closes the block. Written once so the three cannot drift. */
+const masthead = (eyebrow, title) =>
+  `<p class="eyebrow">${esc(eyebrow)}</p><h1>${esc(title)}</h1>
+<div class="rule-heavy"></div><div class="band"></div>`;
+
 const SHELL = (title, body) => `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>
-body{margin:0;background:#111114;color:#e9e8e4;font:14px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-display:grid;place-items:center;min-height:100vh}
-main{max-width:560px;padding:32px}
-h1{font-size:16px;margin:0 0 10px;font-weight:600}
-p{color:#9a9aa3;margin:0 0 18px;font-size:12.5px}
-pre{background:#1a1a1f;border:1px solid #2c2c33;border-radius:8px;padding:12px;overflow:auto;
-font-size:11px;color:#b9b8b3;max-height:44vh;white-space:pre-wrap}
-button,a.btn{display:inline-block;appearance:none;border:1px solid #33333c;background:#1d1d23;color:#e9e8e4;
-border-radius:7px;padding:9px 14px;font:inherit;font-size:12px;cursor:pointer;text-decoration:none;margin-right:8px}
-button:hover,a.btn:hover{background:#26262e}
-.err{color:#e0a4a4}
-</style></head><body><main>${body}</main></body></html>`;
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title>
+<style>${PAGE_CSS}</style></head><body><main>${body}</main></body></html>`;
 
 function notRunningPage(ctx) {
   const p = ctx.project;
   const st = ctx.supervisor.state(p);
   return SHELL(
     `${p.name} is not running`,
-    `<h1>${esc(p.name)}</h1>
+    `${masthead(`lightbox \u00b7 review :${p.port} \u00b7 dev :${p.upstream}`, p.name)}
 <p>Nothing is answering on the dev server behind this port yet.</p>
-${st.error ? `<p class="err">${esc(st.error)}</p>` : ""}
-<p><button id="start">Start it</button><a class="btn" href="${esc(ctx.hubUrl)}">Back to lightbox</a></p>
+<p class="err">${st.error ? esc(st.error) : ""}</p>
+<div class="acts"><button id="start">Start it</button>
+<a class="btn" href="${esc(ctx.hubUrl)}">Back to lightbox</a></div>
 <pre id="log">${esc(ctx.supervisor.tail(p.key, 60) || "(no output yet)")}</pre>
 <script>
 var b=document.getElementById('start');
 b.addEventListener('click',function(){
-  b.disabled=true;b.textContent='Starting…';
+  b.disabled=true;b.textContent='Starting';
   fetch('/__lb/start',{method:'POST'}).then(function(){poll()});
 });
 function poll(){
@@ -457,10 +512,13 @@ if(${st.state === "starting"}) poll();
   );
 }
 
-function notFoundPage(project, rel) {
+function notFoundPage(project, rel, ctx) {
   return SHELL(
-    "404",
-    `<h1>404</h1><p>${esc(project.name)} has nothing at <code>${esc(rel)}</code>.</p>`
+    `404 ${rel}`,
+    `${masthead(project.name, "404")}
+<p>Nothing is served at <code>${esc(rel)}</code>.</p>
+<div class="acts"><a class="btn" href="/">${esc(project.name)} index</a>
+<a class="btn" href="${esc(ctx.hubUrl)}">Back to lightbox</a></div>`
   );
 }
 

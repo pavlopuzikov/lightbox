@@ -127,6 +127,32 @@ in the wrong place.
 Below 900px the row falls to three columns carrying six fields. The verticals
 no longer line up with anything, so they go, and the head goes with them.
 
+## The pages the tool serves itself
+
+Five surfaces carry this system, and the last three are the ones that matter
+most:
+
+| Surface | Where |
+| --- | --- |
+| The hub | `src/hub.mjs` |
+| The overlay | `src/overlay.js` |
+| Starting a dev server | `src/hub.mjs`, the wait page |
+| A directory with no index | `src/proxy.mjs` |
+| A dead dev server, and a 404 | `src/proxy.mjs` |
+
+The last two are the pages you land on when something is wrong, and they were
+the last surfaces still styled from hex literals in a dark palette the rest of
+the tool had stopped using. A reader who hits a 404 four levels into somebody
+else's static site should still know whose chrome they are looking at, so they
+carry the same stock, the same masthead and the same rules, cut down.
+
+The 404 also carries two ways out, the project index and the hub. Without them
+it was a dead end: the reader is inside a site with no navigation of its own,
+which is exactly the moment they need the hub.
+
+`test/design.test.mjs` guards all three source files, so none of them can go
+back to naming a colour.
+
 ## Ornament
 
 One engraved band, `--ornament`, a zigzag with two diamonds, repeated on the x

@@ -9,8 +9,11 @@ import { check } from "../src/tokens.mjs";
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
 
-/* The two files that draw lightbox's own chrome. */
-const SURFACES = ["src/hub.mjs", "src/overlay.js"];
+/* Every file that draws lightbox's own chrome. The proxy is in here because
+   the pages it serves itself, the directory index and the 404 and the "not
+   running" page, are the ones you land on when something is wrong, and they
+   were the last surfaces still styled from hex literals typed inline. */
+const SURFACES = ["src/hub.mjs", "src/overlay.js", "src/proxy.mjs"];
 
 test("the design system defines something, so the checks below are not vacuous", () => {
   // Every assertion in this file is of the form "the chrome contains no X" or
@@ -22,7 +25,7 @@ test("the design system defines something, so the checks below are not vacuous",
   for (const f of SURFACES) assert.ok(read(f).length > 5000, `${f} is suspiciously small`);
 });
 
-test("neither surface hardcodes a colour", () => {
+test("no surface hardcodes a colour", () => {
   // The whole reason this system exists. Before it, #1f6e7a was typed into
   // eleven places across these two files and there was no way to change the
   // accent without finding all eleven.

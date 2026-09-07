@@ -6,6 +6,24 @@ The tool was used to run a front-end audit across 42 projects, and the audit is
 what produced this list. Everything here is a defect the pass found in the tool
 itself rather than in the projects it was pointed at.
 
+### The pages you land on when something is wrong look like the tool now
+
+The hub and the overlay went on the design system first. The three pages the
+proxy serves itself did not, and they are the ones a reader actually hits: a
+directory with no `index.html`, a dev server that is not answering, a route
+that does not exist. All three were still drawn from hex literals in the dark
+palette nothing else uses.
+
+- The directory index is now ruled tabular matter with a `KIND / NAME` head,
+  matching the hub.
+- The 503 names the ports it is talking about, sets the failure in vermilion,
+  and puts the dev server's own output in the margin the way the hub does.
+- The 404 carries two ways out, the project index and the hub. It had none,
+  which made it a dead end inside a site with no navigation of its own.
+- `test/design.test.mjs` now guards `src/proxy.mjs` alongside the other two, so
+  none of the three can go back to naming a colour. It would have caught the 19
+  literals this change removed.
+
 ### The chrome has a design system of its own
 
 Both surfaces used to be styled from hex literals typed inline, the same accent
