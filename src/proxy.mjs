@@ -21,6 +21,7 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { routesFor } from "./routes.mjs";
+import { TOKENS } from "./design.mjs";
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -85,6 +86,12 @@ function injectionFor(ctx) {
     inspect: !!ctx.inspectCommentPath,
     routes: routesFor(ctx.project),
     reviewed: ctx.progress.get(ctx.project.key),
+    // The overlay draws itself in a shadow root under `all: initial`, which
+    // inherits nothing from this page or from lightbox. Sending the design
+    // tokens down with the config is what lets one stylesheet on disk decide
+    // how both surfaces look, instead of the palette being typed out a second
+    // time in overlay.js and drifting the first time a colour changes.
+    tokens: TOKENS,
   };
   return (
     `<script data-lightbox-config>window.__LIGHTBOX=${JSON.stringify(cfg).replace(

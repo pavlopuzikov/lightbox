@@ -6,6 +6,36 @@ The tool was used to run a front-end audit across 42 projects, and the audit is
 what produced this list. Everything here is a defect the pass found in the tool
 itself rather than in the projects it was pointed at.
 
+### The chrome has a design system of its own
+
+Both surfaces used to be styled from hex literals typed inline, the same accent
+colour written out in eleven places across two files, and no way to change any
+of it in one edit. The look that produced was the generic light-grey-panel
+default, which is the worst possible choice for a tool whose whole job is to sit
+on top of forty other design systems while you judge them.
+
+- Added `src/design.css`, the single source for every colour, face, rule weight
+  and duration, and `src/design.mjs`, which parses it and hands the values to
+  both surfaces. The overlay's shadow root gets them through the injected
+  config, because `all: initial` means it inherits nothing.
+- Redrew the hub and the overlay as a letterpress broadside: cream stock, black
+  and vermilion, condensed capitals in the display sizes, three rule weights,
+  and one engraved ornament band per surface. See `DESIGN.md`.
+- State is carried by the fill of a square rather than by a palette, so red is
+  spent only on the tally and on failures.
+- `test/design.test.mjs` fails if either surface hardcodes a colour, if the
+  chrome references an undefined token, or if `DESIGN.md` drifts from the
+  stylesheet. The last of those is `lightbox tokens` pointed at lightbox.
+- Fixed along the way: the progress bar had no upper bound, so a project whose
+  stored progress outran its current route list drew an element 19,000px wide
+  and gave the whole hub a horizontal scrollbar. The status dot styles referred
+  to `--line`, `--dim` and `--fg`, three variables this stylesheet has never
+  defined, so the dot painted transparent.
+- `npm run check:pack` now also asserts the two files the code reads from disk
+  rather than imports, `src/overlay.js` and `src/design.css`. Following imports
+  can never find those, which is the same blind spot that shipped 0.1.0 without
+  its audit commands.
+
 ### Nothing that was not measured reports as zero any more
 
 This was the organising defect, and it was measurable in the audit data on

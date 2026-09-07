@@ -36,6 +36,18 @@ check has to say which of the three it produced, and why.
 Exit codes carry the same distinction. **1** is a finding. **2** is "this run
 could not measure what you asked for". Do not collapse them.
 
+## Touching the chrome
+
+Colours, type, rules and spacing live in [`src/design.css`](src/design.css) and
+nowhere else. `src/hub.mjs` and `src/overlay.js` may only reference them through
+`var()`; `test/design.test.mjs` fails the build if either file names a colour
+directly, or references a token the stylesheet does not define.
+
+Read [DESIGN.md](DESIGN.md) before changing a value. Most of the constraints in
+it are decisions with a reason attached rather than preferences, and two of them
+will break the tool silently if ignored: no semicolon may appear inside a token
+value, and colours have to stay literal hex.
+
 ## Before you open a pull request
 
 ```bash

@@ -11,6 +11,17 @@
  * page's stylesheet cannot reach in and the page's stacking context cannot bury
  * it. The host is marked data-lightbox, which is also how you tell your own
  * chrome apart from the site's when you are inspecting.
+ *
+ * It is drawn in lightbox's own design system and not in anything resembling a
+ * default: cream stock, a red rule along its top edge, condensed capitals, a
+ * hard offset impression instead of a soft shadow. That is the point. This bar
+ * spends all day sitting on top of forty other people's design systems, and if
+ * it is going to be in the frame while you judge them it has to be obvious at
+ * a glance which pixels are yours and which are the site's.
+ *
+ * The values come from src/design.css. The proxy passes them down in
+ * window.__LIGHTBOX.tokens, because a shadow root under `all: initial`
+ * inherits nothing and there is no second copy of the palette to keep in step.
  */
 (function () {
   "use strict";
@@ -48,41 +59,83 @@
   host.style.cssText = "all:initial";
   var root = host.attachShadow ? host.attachShadow({ mode: "open" }) : host;
 
+  /* The design system, handed down by the proxy. `all: initial` on the host
+     does not reset custom properties, so declaring them on :host is enough to
+     light up every var() below. */
+  var TOKENS = CFG.tokens || {};
+  var vars = Object.keys(TOKENS)
+    .map(function (k) {
+      return k + ":" + TOKENS[k];
+    })
+    .join(";");
+  if (!vars) console.warn("[lightbox] no design tokens in the injected config; the overlay will use browser defaults");
+
   var style = document.createElement("style");
   style.textContent = [
-    ":host{all:initial}",
-    "*{box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Helvetica,Arial,sans-serif}",
-    ".bar{position:fixed;left:16px;bottom:16px;z-index:2147482000;display:flex;align-items:stretch;",
-    "background:#fcfcfa;border:1px solid #17171a;color:#17171a;opacity:.55;transition:opacity .12s ease}",
+    ":host{all:initial;" + vars + "}",
+    "*{box-sizing:border-box;font-family:var(--sans)}",
+
+    /* The bar. A red rule along the top edge and a hard offset impression
+       below it: no blur, because a press does not cast a shadow, and a second
+       impression slightly off register is what this actually looks like on
+       paper. Held at .62 until you go near it, so it is legible without
+       competing with the page it sits on. */
+    ".bar{position:fixed;left:18px;bottom:18px;z-index:2147482000;display:flex;align-items:stretch;",
+    "background:var(--paper);color:var(--ink);border:2px solid var(--ink);",
+    "border-top:3px solid var(--vermilion);box-shadow:4px 4px 0 var(--ink);",
+    "opacity:.62;transition:opacity var(--tap) var(--ease)}",
     "@media (prefers-reduced-motion:reduce){.bar{transition:none}}",
     ".bar:hover,.bar.open,.bar:focus-within{opacity:1}",
-    "button{appearance:none;border:0;border-left:1px solid #dedad1;background:transparent;color:#17171a;",
-    "font-size:12px;line-height:1;padding:9px 11px;cursor:pointer;font-family:inherit}",
+
+    "button{appearance:none;border:0;border-left:1px solid var(--rule-ink);background:transparent;",
+    "color:var(--ink-2);font:10px/1 var(--mono);text-transform:uppercase;",
+    "letter-spacing:var(--track-caps);padding:10px 11px;cursor:pointer}",
     "button:first-child{border-left:0}",
-    "button:hover{background:#f0eee8}",
-    "button:disabled{color:#b3b0a8;cursor:default;background:transparent}",
-    "button:focus-visible{outline:2px solid #1f6e7a;outline-offset:-2px}",
-    ".label{display:flex;gap:10px;align-items:baseline;padding:8px 12px;cursor:pointer;max-width:48vw;",
-    "border-left:1px solid #dedad1}",
-    ".name{font-family:'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif;font-size:14px;color:#17171a}",
-    ".count{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:#7d7b75;font-variant-numeric:tabular-nums}",
-    ".path{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:#1f6e7a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
-    ".dot{width:7px;height:7px;background:#1f6e7a;flex:none;align-self:center}",
-    ".dot.todo{background:transparent;border:1px solid #7d7b75}",
-    ".sheet{position:fixed;left:16px;bottom:56px;z-index:2147482001;width:min(480px,88vw);max-height:62vh;",
-    "overflow:auto;background:#fcfcfa;border:1px solid #17171a;color:#17171a;display:none}",
+    "button:hover{background:var(--paper-tint);color:var(--ink)}",
+    "button:disabled{color:var(--rule-ink);cursor:default;background:transparent}",
+    "button:focus-visible{outline:2px solid var(--vermilion);outline-offset:-3px}",
+    ".nav{font-size:13px;letter-spacing:0;padding:10px 9px}",
+
+    ".label{display:flex;gap:10px;align-items:center;padding:8px 12px;cursor:pointer;",
+    "max-width:48vw;border-left:1px solid var(--rule-ink)}",
+    ".label:hover{background:var(--paper-tint)}",
+    ".name{font:400 13px/1.2 var(--display);font-stretch:condensed;text-transform:uppercase;",
+    "letter-spacing:.05em;color:var(--ink)}",
+    ".count{font:10px/1 var(--mono);color:var(--ink-3);letter-spacing:var(--track-caps);",
+    "text-transform:uppercase;font-variant-numeric:tabular-nums;flex:none}",
+    ".path{font:11px/1 var(--mono);color:var(--ink-2);overflow:hidden;",
+    "text-overflow:ellipsis;white-space:nowrap}",
+
+    /* Same square as the hub row marks, and it means the same thing: filled is
+       done, hollow is not. One vocabulary across both surfaces. */
+    ".dot{width:8px;height:8px;background:var(--ink);flex:none}",
+    ".dot.todo{background:none;border:1.5px solid var(--ink-3)}",
+
+    ".sheet{position:fixed;left:18px;bottom:62px;z-index:2147482001;width:min(500px,88vw);",
+    "max-height:62vh;overflow:auto;background:var(--paper);color:var(--ink);",
+    "border:2px solid var(--ink);border-top:3px solid var(--vermilion);",
+    "box-shadow:4px 4px 0 var(--ink);display:none}",
     ".sheet.open{display:block}",
-    ".sheet h4{margin:0;padding:12px 14px 10px;font-family:'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif;font-weight:400;font-size:15px;",
-    "border-bottom:1px solid #dedad1}",
-    ".sheet a{display:flex;gap:10px;align-items:center;padding:7px 14px;color:#4b4a47;text-decoration:none;",
-    "font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;border-bottom:1px solid #ebe8e1}",
-    ".sheet a:hover{color:#1f6e7a;background:#f4f2ec}",
-    ".sheet a.here{color:#17171a;background:#eef3f3}",
+    ".sheet h4{margin:0;padding:13px 15px 10px;font:400 15px/1.1 var(--display);",
+    "font-stretch:condensed;text-transform:uppercase;letter-spacing:var(--track-caps);color:var(--ink)}",
+    /* The ornament again, once, exactly where the masthead ends. */
+    ".sheet .band{height:var(--ornament-height);background:var(--ornament) repeat-x left center;",
+    "margin:0 15px 4px}",
+    ".sheet a{display:flex;gap:10px;align-items:center;padding:7px 15px;color:var(--ink-2);",
+    "text-decoration:none;font:11.5px/1.4 var(--mono);border-bottom:1px solid var(--rule-ink-2)}",
+    ".sheet a:hover{color:var(--ink);background:var(--paper-tint)}",
+    /* Where you are, marked in the margin the way a proof is marked. */
+    ".sheet a.here{color:var(--ink);background:var(--paper-tint);",
+    "box-shadow:inset 3px 0 0 var(--vermilion)}",
     ".sheet a .p{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
-    ".sheet a .dyn{color:#7d7b75;font-size:10px;flex:none;margin-left:auto}",
-    ".foot{padding:10px 14px;color:#7d7b75;font-size:11px;line-height:1.7}",
-    ".fam{padding:10px 14px 3px;color:#7d7b75;font-size:10px}",
-    "kbd{border:1px solid #dedad1;padding:0 4px;color:#4b4a47;font-size:10px;font-family:inherit}",
+    ".sheet a .dyn{color:var(--ink-3);font-size:9.5px;text-transform:uppercase;",
+    "letter-spacing:var(--track-caps);flex:none;margin-left:auto}",
+    ".fam{padding:11px 15px 3px;color:var(--ink-3);font:9.5px/1.6 var(--mono);",
+    "text-transform:uppercase;letter-spacing:var(--track-micro)}",
+    ".foot{padding:11px 15px 13px;color:var(--ink-3);font:10px/1.9 var(--mono);",
+    "border-top:2px solid var(--ink)}",
+    "kbd{border:1px solid var(--rule-ink);background:var(--paper-2);padding:1px 4px;",
+    "color:var(--ink-2);font:9.5px/1 var(--mono)}",
   ].join("");
   root.appendChild(style);
 
@@ -91,6 +144,7 @@
 
   var prev = document.createElement("button");
   prev.type = "button";
+  prev.className = "nav";
   prev.textContent = "‹";
   prev.title = "Previous page (Alt+[)";
 
@@ -100,6 +154,7 @@
 
   var next = document.createElement("button");
   next.type = "button";
+  next.className = "nav";
   next.textContent = "›";
   next.title = "Next page (Alt+])";
 
@@ -109,7 +164,7 @@
 
   var hub = document.createElement("button");
   hub.type = "button";
-  hub.textContent = "Hub";
+  hub.textContent = "hub";
   hub.title = "Back to the hub (Alt+H)";
 
   bar.appendChild(prev);
@@ -157,12 +212,7 @@
     var ct = document.createElement("span");
     ct.className = "count";
     ct.textContent =
-      (index >= 0 ? index + 1 : "•") +
-      "/" +
-      routes.length +
-      " · " +
-      reviewed.size +
-      " done";
+      (index >= 0 ? index + 1 : "•") + "/" + routes.length + " · " + reviewed.size + " done";
     var pt = document.createElement("span");
     pt.className = "path";
     pt.textContent = cur ? cur.path : location.pathname;
@@ -173,14 +223,18 @@
 
     prev.disabled = index <= 0;
     next.disabled = index < 0 || index >= routes.length - 1;
-    mark.textContent = reviewed.has(location.pathname) ? "Done ✓" : "Mark done";
+    mark.textContent = reviewed.has(location.pathname) ? "reviewed" : "mark done";
   }
 
   function renderSheet() {
     sheet.textContent = "";
     var h = document.createElement("h4");
-    h.textContent = (CFG.name || "project") + " · " + routes.length + " pages";
+    h.textContent =
+      (CFG.name || "project") + " · " + routes.length + (routes.length === 1 ? " page" : " pages");
     sheet.appendChild(h);
+    var band = document.createElement("div");
+    band.className = "band";
+    sheet.appendChild(band);
     /* A header only where it groups something: never for a family of one,
        never when the whole project is one family. */
     var famCount = 0;

@@ -6,9 +6,10 @@
  * and reports what it is told, so a browser tab that dies mid-review does not
  * take a dev server with it.
  *
- * Visually it is a light table: a bright ground, hairlines, one serif for
- * names, one monospace for paths and ports, and text where a dashboard would
- * put buttons and badges. The list is dense on purpose; forty projects should
+ * Visually it is a letterpress broadside: cream stock, two inks, condensed
+ * wood type in the display sizes, and horizontal rules doing the work that
+ * cards and badges would do elsewhere. Every value comes from src/design.css
+ * through src/design.mjs. The list is dense on purpose; forty projects should
  * fit on two screens.
  */
 
@@ -16,6 +17,7 @@ import fs from "node:fs";
 import http from "node:http";
 import { summarise, STATUSES } from "./handover.mjs";
 import { familiesOf, routesFor, clearRouteCache } from "./routes.mjs";
+import { rootCss, token } from "./design.mjs";
 
 const esc = (s) =>
   String(s ?? "")
@@ -28,90 +30,188 @@ const esc = (s) =>
  * Page
  * ------------------------------------------------------------------ */
 
-const CSS = `
-:root{--ground:#f7f6f2;--panel:#fcfcfa;--ink:#17171a;--ink-2:#4b4a47;--muted:#7d7b75;
---hair:#dedad1;--hair-2:#ebe8e1;--teal:#1f6e7a;--fail:#a23f3f;
---serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
---sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Helvetica,Arial,sans-serif;
---mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
+const CSS = rootCss() + `
 *{box-sizing:border-box}
-html{background:var(--ground)}
-body{margin:0;color:var(--ink);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
-a{color:var(--teal);text-decoration:none}
-a:hover{text-decoration:underline;text-underline-offset:2px}
-:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
-.wrap{max-width:1160px;margin:0 auto;padding:0 40px 96px}
-header{display:flex;align-items:baseline;gap:28px;flex-wrap:wrap;padding:44px 0 22px;
-border-bottom:1px solid var(--ink)}
-h1{font:400 38px/1 var(--serif);letter-spacing:-.01em;margin:0}
-.stat{color:var(--ink-2);font-size:13.5px}
-.stat b{font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
-.stat .off{color:var(--fail)}
-.spacer{flex:1}
-button.text{appearance:none;border:0;background:none;padding:0;font:inherit;color:var(--teal);cursor:pointer}
-button.text:hover{text-decoration:underline;text-underline-offset:2px}
-button.text:disabled{color:var(--muted);cursor:default;text-decoration:none}
-button.text.quiet{color:var(--muted)}
-button.text.quiet:hover{color:var(--ink)}
-section{margin-top:54px}
-section h2{font:400 24px/1.2 var(--serif);margin:0 0 4px}
-section .blurb{margin:0 0 14px;color:var(--muted);font-size:13px;max-width:64ch}
-.list{border-top:1px solid var(--hair)}
-.row{display:grid;grid-template-columns:14px minmax(180px,1.3fr) minmax(0,2fr) 128px 140px 150px;
-gap:0 18px;align-items:start;padding:14px 0 13px;border-bottom:1px solid var(--hair);position:relative}
-.row.missing .name,.row.missing .note{color:var(--muted)}
-.mark{width:8px;height:8px;margin-top:8px;border:1px solid var(--muted);background:transparent}
+html{background:var(--paper)}
+body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.55 var(--sans);
+-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+
+/* The one full-bleed element on the sheet: a red bar across the head of the
+   page, the way a broadside carries its rule right off the trimmed edge. */
+body::before{content:"";display:block;height:6px;background:var(--vermilion)}
+
+a{color:var(--ink);text-decoration:underline;text-decoration-thickness:1px;
+text-underline-offset:3px;text-decoration-color:var(--rule-ink)}
+a:hover{color:var(--vermilion);text-decoration-color:var(--vermilion)}
+:focus-visible{outline:2px solid var(--vermilion);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 44px 0}
+
+/* ---------------------------------------------------------------- *
+ * Masthead
+ *
+ * Wood type on the left, the tally on the right, one heavy bar under both.
+ * The tally is the largest thing on the page and the only red numeral, which
+ * is deliberate: of everything the hub knows, how much of the work is done is
+ * the number you came to read.
+ * ---------------------------------------------------------------- */
+header{display:grid;grid-template-columns:1fr auto;align-items:end;gap:16px 40px;padding:46px 0 12px}
+h1{margin:0;font:400 clamp(46px,7.5vw,78px)/.82 var(--display);font-stretch:condensed;
+text-transform:uppercase;letter-spacing:var(--track-display);color:var(--ink)}
+.tagline{margin:10px 0 0;font:12px/1.3 var(--sans);color:var(--ink-3);max-width:44ch}
+.tally{text-align:right;line-height:.78}
+.tally-n{display:block;font:400 clamp(48px,8vw,84px)/.78 var(--slab);font-weight:700;
+color:var(--vermilion);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.tally-l{display:block;margin-top:9px;font:10px/1 var(--mono);text-transform:uppercase;
+letter-spacing:var(--track-micro);color:var(--ink-3)}
+
+.rule-heavy{height:var(--rule-heavy);background:var(--ink)}
+
+/* The colophon: everything the hub knows about itself, set the size a
+   broadside sets its imprint. Diamonds separate the facts, so the line reads
+   as one typeset run rather than a row of chips. */
+.colophon{display:flex;align-items:center;flex-wrap:wrap;gap:0 14px;margin:0;padding:11px 0 0;
+font:10.5px/1.9 var(--mono);text-transform:uppercase;letter-spacing:var(--track-caps);color:var(--ink-3)}
+.colophon b{font-weight:400;color:var(--ink);font-variant-numeric:tabular-nums}
+.colophon .off{color:var(--vermilion)}
+.colophon .spacer{flex:1 0 24px}
+.dia{width:5px;height:5px;background:var(--vermilion);transform:rotate(45deg);flex:none}
+.dia.ink{background:var(--rule-ink)}
+
+/* The engraved band. One SVG, repeated, and the only ornament in the system:
+   it closes the masthead and opens the list, and appears nowhere else. */
+.band{height:var(--ornament-height);margin:16px 0 0;
+background:var(--ornament) repeat-x left center}
+
+/* ---------------------------------------------------------------- *
+ * Sections
+ * ---------------------------------------------------------------- */
+section{margin-top:44px}
+.head{display:flex;align-items:baseline;gap:12px;border-bottom:var(--rule-mid) solid var(--ink);padding-bottom:6px}
+section h2{margin:0;font:400 21px/1 var(--display);font-stretch:condensed;text-transform:uppercase;
+letter-spacing:var(--track-caps);color:var(--ink)}
+.count{font:11.5px/1 var(--mono);color:var(--vermilion);letter-spacing:var(--track-caps);
+text-transform:uppercase;font-variant-numeric:tabular-nums}
+section .blurb{margin:9px 0 2px;color:var(--ink-3);font-size:12.5px;line-height:1.6;max-width:66ch}
+
+/* ---------------------------------------------------------------- *
+ * The list
+ *
+ * Rules, not cards. Forty projects have to fit in two screens, so every row
+ * is one hairline apart from the next and nothing is boxed, padded or
+ * shadowed. Density is the feature.
+ * ---------------------------------------------------------------- */
+.list{margin-top:10px}
+.row{display:grid;grid-template-columns:16px minmax(150px,1fr) minmax(0,1.9fr) 96px 116px 200px;
+gap:0 18px;align-items:start;padding:12px 4px 11px;border-bottom:var(--rule-hair) solid var(--rule-ink);
+position:relative}
+.row:first-child{border-top:var(--rule-hair) solid var(--rule-ink)}
+.row:hover{background:var(--paper-tint)}
+.row.missing .name,.row.missing .note{color:var(--ink-3)}
+
+/* State is carried by the fill of one square, not by a palette. Hollow is
+   stopped, half is working, solid is up, and red is the only failure. Adding
+   a third ink for "healthy" would have spent the loudest thing in the system
+   on the most ordinary state on the page. */
+.mark{width:9px;height:9px;margin-top:6px;border:1.5px solid var(--ink-3);background:transparent}
 .mark.static{visibility:hidden}
-.mark.ready{background:var(--teal);border-color:var(--teal)}
-.mark.starting,.mark.installing{border-color:var(--teal);
-background:linear-gradient(var(--teal),var(--teal)) 0 0/50% 100% no-repeat}
-.mark.failed{border-color:var(--fail);background:var(--fail)}
-.name{font:400 17px/1.25 var(--serif);color:var(--ink);margin:0}
-.sys{color:var(--muted);font-size:12px;margin-top:3px}
-.note{margin:2px 0 0;color:var(--ink-2);font-size:13px;line-height:1.45}
-.hand{margin:4px 0 0;font:11.5px/1.7 var(--mono);color:var(--muted)}.hand:empty{display:none}
-.acts button.text.ok{color:var(--muted);cursor:default}
-.err{margin:6px 0 0;color:var(--fail);font-size:12.5px;white-space:pre-wrap}
+.mark.ready{background:var(--ink);border-color:var(--ink)}
+.mark.starting,.mark.installing{border-color:var(--ink);
+background:linear-gradient(var(--ink),var(--ink)) 0 0/100% 50% no-repeat}
+.mark.failed{background:var(--vermilion);border-color:var(--vermilion)}
+
+.name{margin:0;font:400 14px/1.2 var(--display);font-stretch:condensed;text-transform:uppercase;
+letter-spacing:.05em;color:var(--ink)}
+.sys{margin-top:5px;font:10px/1.4 var(--mono);text-transform:uppercase;
+letter-spacing:var(--track-caps);color:var(--ink-3)}
+.note{margin:1px 0 0;color:var(--ink-2);font-size:12.5px;line-height:1.55}
+.hand{margin:5px 0 0;font:10.5px/1.75 var(--mono);color:var(--ink-3)}.hand:empty{display:none}
+.err{margin:6px 0 0;color:var(--vermilion);font-size:12px;line-height:1.5;white-space:pre-wrap}
 .err:empty{display:none}
-.adopted{margin:6px 0 0;color:var(--muted);font-size:12.5px;line-height:1.45}
+.adopted{margin:6px 0 0;color:var(--ink-3);font-size:12px;line-height:1.5}
 .adopted:empty{display:none}
-.num{font:12.5px/1.6 var(--mono);color:var(--ink-2);font-variant-numeric:tabular-nums;margin-top:3px}
+.num{margin-top:2px;font:11.5px/1.7 var(--mono);color:var(--ink-3);font-variant-numeric:tabular-nums}
 .num b{font-weight:600;color:var(--ink)}
-.num .m{color:var(--muted)}
-.acts{display:flex;flex-direction:column;align-items:flex-start;gap:4px;margin-top:2px;font-size:13px}
-.acts .open{font-weight:500}
-.acts .open:after{content:" →"}
-.prog{position:absolute;left:32px;right:0;bottom:-1px;height:2px}
-.prog i{display:block;height:100%;background:var(--teal)}
-.more{grid-column:2 / -1;display:none;padding:10px 0 4px}
+.num .m{color:var(--ink-3)}
+
+/* Actions ------------------------------------------------------- */
+/* One run of small capitals, wrapping, the way the bottom line of a broadside
+   sets its imprint. Stacked vertically these cost about 100px of row height
+   each, and forty of those is the difference between two screens and five. */
+.acts{display:flex;flex-wrap:wrap;align-items:baseline;gap:5px 11px;margin-top:1px}
+button.text{appearance:none;border:0;background:none;padding:0;cursor:pointer;
+font:10.5px/1.5 var(--mono);text-transform:uppercase;letter-spacing:var(--track-caps);color:var(--ink-2)}
+button.text:hover{color:var(--vermilion)}
+button.text:disabled{color:var(--ink-3);cursor:default}
+button.text.quiet{color:var(--ink-3)}
+button.text.quiet:hover{color:var(--ink)}
+.acts .open{flex:0 0 100%;font:400 12.5px/1.3 var(--display);font-stretch:condensed;
+text-transform:uppercase;letter-spacing:.08em;color:var(--vermilion);text-decoration:none}
+.acts .open:hover{color:var(--vermilion-2);text-decoration:underline;
+text-decoration-thickness:1.5px;text-underline-offset:3px}
+.acts .open:after{content:" \\2192"}
+.acts button.text.ok{color:var(--ink-3);cursor:default}
+
+/* Progress sits on the row's own hairline: the rule fills up rather than a
+   bar being added next to it. */
+/* A short measure under the project name, not a bar across the row. Run it
+   the full width and a finished project draws a 2px black line the width of
+   the sheet, which reads as a section rule and cuts the list in half in the
+   wrong place. Held to the name column, it stays a gauge. */
+.prog{position:absolute;left:34px;width:168px;bottom:calc(var(--rule-hair) * -1);
+height:var(--rule-mid);overflow:hidden}
+.prog i{display:block;height:100%;max-width:100%;background:var(--ink)}
+
+.more{grid-column:2 / -1;display:none;padding:12px 0 4px}
 .row.open-pages .more.pages,.row.open-log .more.log{display:block}
-.routes{margin:0;padding:0;list-style:none;columns:2;column-gap:32px;font:12.5px/1.9 var(--mono)}
+.routes{margin:0;padding:0;list-style:none;columns:2;column-gap:36px;font:11.5px/2 var(--mono)}
 .routes li{break-inside:avoid;display:flex;gap:10px;align-items:center}
-.routes .d{width:6px;height:6px;border:1px solid var(--muted);flex:none}
-.routes .d.on{background:var(--teal);border-color:var(--teal)}
-.routes a{color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.routes a:hover{color:var(--teal)}
-.routes .dyn{color:var(--muted);font-size:11px;margin-left:auto;flex:none}
-.routes .fam{color:var(--muted);font:11px/1.8 var(--mono);margin-top:8px;break-after:avoid}
-pre{margin:0;padding:10px 12px;background:var(--panel);border:1px solid var(--hair);
-font:11.5px/1.5 var(--mono);color:var(--ink-2);max-height:260px;overflow:auto;white-space:pre-wrap}
-@media (max-width:900px){
-.wrap{padding:0 20px 64px}
-.row{grid-template-columns:14px 1fr 1fr;gap:6px 14px}
-.row .note{grid-column:2 / -1}.row .num{grid-column:2}
-.row .acts{grid-column:3;flex-direction:row;flex-wrap:wrap;gap:4px 14px}
-.routes{columns:1}}
-.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.routes .d{width:6px;height:6px;border:1px solid var(--ink-3);flex:none}
+.routes .d.on{background:var(--ink);border-color:var(--ink)}
+.routes a{color:var(--ink-2);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.routes a:hover{color:var(--vermilion)}
+.routes .dyn{color:var(--ink-3);font-size:10px;margin-left:auto;flex:none;
+text-transform:uppercase;letter-spacing:var(--track-caps)}
+.routes .fam{margin-top:9px;color:var(--ink-3);font:10px/1.9 var(--mono);
+text-transform:uppercase;letter-spacing:var(--track-caps);break-after:avoid}
+pre{margin:0;padding:11px 13px;background:var(--paper-2);border:var(--rule-hair) solid var(--rule-ink);
+font:11px/1.55 var(--mono);color:var(--ink-2);max-height:260px;overflow:auto;white-space:pre-wrap}
+
+/* Status ---------------------------------------------------------
+ * A diamond, filled the way the row marks are filled. This used to reach for
+ * --line, --dim and --fg, none of which this stylesheet has ever defined, so
+ * the dot painted transparent and the select had no border at all. */
 .status{display:inline-flex;align-items:center;gap:6px}
-.status::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--line);flex:none}
-.status.s-active::before{background:#3f9d6a}
-.status.s-paused::before{background:#b8863b}
-.status.s-archived::before{background:#7d8590}
-.status.s-retired::before{background:#a8453f}
-.status select{appearance:none;background:none;border:0;border-bottom:1px solid var(--line);color:var(--dim);font:inherit;font-size:12px;padding:0 2px 1px;cursor:pointer;letter-spacing:.02em}
-.status select:hover,.status select:focus-visible{color:var(--fg);border-bottom-color:var(--fg)}
-.status.s-unset select{font-style:italic}
-@media (prefers-reduced-motion:no-preference){a,button.text{transition:color .12s ease}}
+.status::before{content:"";width:6px;height:6px;background:var(--ink-3);transform:rotate(45deg);flex:none}
+.status.s-unset::before{background:none;border:1px solid var(--rule-ink)}
+.status.s-active::before{background:var(--ink)}
+.status.s-paused::before{background:none;border:1.5px solid var(--ink)}
+.status.s-archived::before{background:none;border:1px solid var(--ink-3)}
+.status.s-retired::before{background:var(--vermilion)}
+.status select{appearance:none;background:none;border:0;border-bottom:1px solid var(--rule-ink);
+color:var(--ink-3);font:10.5px/1.5 var(--mono);text-transform:uppercase;
+letter-spacing:var(--track-caps);padding:0 2px 1px;cursor:pointer}
+.status select:hover,.status select:focus-visible{color:var(--ink);border-bottom-color:var(--ink)}
+
+/* Colophon foot: the imprint line at the bottom of the sheet. */
+.foot{margin:56px 0 0;border-top:var(--rule-heavy) solid var(--ink);padding:12px 0 40px;
+display:flex;align-items:center;flex-wrap:wrap;gap:0 14px;
+font:10px/1.9 var(--mono);text-transform:uppercase;letter-spacing:var(--track-micro);color:var(--ink-3)}
+
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+@media (max-width:900px){
+.wrap{padding:0 20px}
+header{grid-template-columns:1fr;align-items:start}
+.tally{text-align:left}
+.row{grid-template-columns:16px 1fr 1fr;gap:6px 14px}
+.row .note{grid-column:2 / -1}.row .num{grid-column:2}
+.row .acts{grid-column:3;flex-direction:row;flex-wrap:wrap;gap:6px 14px}
+.routes{columns:1}}
+
+/* Ink meets paper or it does not. Colour only, never movement. */
+@media (prefers-reduced-motion:no-preference){
+a,button.text,.acts .open,.row{transition:color var(--tap) var(--ease),
+background-color var(--tap) var(--ease),text-decoration-color var(--tap) var(--ease)}}
 `;
 
 const STATE_LABEL = {
@@ -132,7 +232,12 @@ function handLine(h) {
 function row(p, st, routes, done, hand) {
   const missing = !p.exists;
   const key = esc(p.key);
-  const pct = routes.length ? Math.round((done / routes.length) * 100) : 0;
+  // Clamped, because `done` counts stored paths and `routes` is what the
+  // project has today. Delete a route and the two disagree, the bar runs past
+  // 100%, and an absolutely positioned element 19,000px wide gives the whole
+  // hub a horizontal scrollbar. Found by rendering a fixture whose progress
+  // outran its route list.
+  const pct = routes.length ? Math.min(100, Math.round((done / routes.length) * 100)) : 0;
   const node = p.kind === "node";
   const needsInstall = node && !p.hasModules && p.exists;
   const running = node && (st.state === "ready" || st.state === "starting");
@@ -226,7 +331,10 @@ function page(ctx) {
           return row(p, supervisor.state(p), routes, progress.countFor(p.key), handover.get(p.key));
         })
         .join("");
-      return `<section><h2>${esc(g.title)}</h2>${
+      const live = items.filter((p) => p.exists).length;
+      return `<section><div class="head"><h2>${esc(g.title)}</h2><span class="count">${
+        items.length
+      }${live < items.length ? ` &middot; ${items.length - live} missing` : ""}</span></div>${
         g.blurb ? `<p class="blurb">${esc(g.blurb)}</p>` : ""
       }<div class="list">${rows}</div></section>`;
     })
@@ -240,15 +348,29 @@ function page(ctx) {
 <title>lightbox</title><link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <style>${CSS}</style></head><body><div class="wrap">
 <header>
-  <h1>lightbox</h1>
-  <span class="stat"><b>${catalogue.projects.length}</b> projects · <b>${totalPages}</b> pages · <b id="done">${totalDone}</b> reviewed</span>
-  <span class="stat">inspect-comment ${
-    ctx.inspectCommentPath ? "loaded" : '<span class="off">missing</span>'
-  } · <span id="bridge">bridge ?</span></span>
+  <div>
+    <h1>lightbox</h1>
+    <p class="tagline">Every front end you have built, running at once, each one carrying the same review overlay.</p>
+  </div>
+  <div class="tally">
+    <span class="tally-n" id="done">${totalDone}</span>
+    <span class="tally-l">pages reviewed</span>
+  </div>
+</header>
+<div class="rule-heavy"></div>
+<p class="colophon">
+  <b>${catalogue.projects.length}</b>&nbsp;projects <i class="dia"></i>
+  <b>${totalPages}</b>&nbsp;pages <i class="dia"></i>
+  inspect-comment ${ctx.inspectCommentPath ? "loaded" : '<span class="off">missing</span>'} <i class="dia"></i>
+  <span id="bridge">bridge ?</span>
   <span class="spacer"></span>
   <button class="text quiet" id="stopall">Stop all dev servers</button>
-</header>
+</p>
+<div class="band"></div>
 <main>${sections}</main>
+<p class="foot">lightbox <i class="dia"></i> :${ctx.hubPort || 4000} <i class="dia ink"></i>
+  ${catalogue.groups.length}&nbsp;groups <i class="dia ink"></i> ${catalogue.projects.length}&nbsp;projects
+  <span class="spacer"></span> made on this machine</p>
 </div>
 <script>
 var LABEL=${JSON.stringify(STATE_LABEL)};
@@ -325,12 +447,17 @@ function waitPage(p, hubUrl) {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Starting ${esc(p.name)}</title><link rel="icon" href="${esc(hubUrl)}favicon.svg" type="image/svg+xml">
 <style>${CSS}
-main.wait{max-width:640px;margin:0 auto;padding:96px 40px}
-.wait h1{font-size:34px;margin-bottom:12px}
-.wait .prog{position:static;display:block;background:var(--hair);margin:22px 0 14px}
-.wait .acts{flex-direction:row;gap:22px;margin:0 0 22px}
+main.wait{max-width:660px;margin:0 auto;padding:84px 44px}
+.wait h1{font-size:clamp(38px,6vw,58px);margin:0 0 6px}
+.wait .rule-heavy{margin:14px 0 0}
+.wait .note{font-size:13.5px;max-width:52ch;margin:16px 0 0}
+.wait .prog{position:static;display:block;height:var(--ornament-height);
+background:var(--paper-tint);margin:22px 0 16px}
+.wait .prog i{background:var(--vermilion)}
+.wait .acts{flex-direction:row;gap:24px;margin:0 0 24px}
 </style></head><body><main class="wait">
 <h1>${esc(p.name)}</h1>
+<div class="rule-heavy"></div>
 <p class="note">Starting its dev server on :${p.upstream}. First boot compiles the whole app, so a minute is normal.</p>
 <span class="prog"><i style="width:8%" id="b"></i></span>
 <p class="err" id="err"></p>
@@ -354,10 +481,13 @@ poll();
 </script></body></html>`;
 }
 
-/* A paper square with a teal one on the light table. */
+/* The broadside in 32 pixels: cream stock, a heavy black bar, a red block
+   under it. Recognisable in a tab strip at 16px, which rules out type. */
 const FAVICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-<rect width="32" height="32" fill="#f7f6f2"/><rect x="6" y="6" width="20" height="20" fill="none" stroke="#17171a" stroke-width="1.5"/>
-<rect x="12" y="12" width="8" height="8" fill="#1f6e7a"/></svg>`;
+<rect width="32" height="32" fill="${token("--paper")}"/>
+<rect x="5" y="7" width="22" height="4" fill="${token("--ink")}"/>
+<rect x="5" y="14" width="22" height="8" fill="${token("--vermilion")}"/>
+<rect x="5" y="25" width="22" height="2" fill="${token("--ink")}"/></svg>`;
 
 /* ------------------------------------------------------------------ *
  * Server

@@ -22,8 +22,16 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const bin = fs.readFileSync(path.join(ROOT, "bin", "lightbox.mjs"), "utf8");
 
+/*
+ * Files the code reads from disk rather than imports, which is the one thing
+ * following imports can never find. src/overlay.js is served to the browser by
+ * the proxy and src/design.css is parsed by src/design.mjs at import time, so
+ * a tarball without them installs cleanly and then fails at the first request.
+ */
+const READ_AT_RUNTIME = ["src/overlay.js", "src/design.css"];
+
 /* Every relative module bin/lightbox.mjs imports, static or dynamic. */
-const wanted = new Set(["bin/lightbox.mjs"]);
+const wanted = new Set(["bin/lightbox.mjs", ...READ_AT_RUNTIME]);
 for (const m of bin.matchAll(/from\s+"(\.\.\/[^"]+)"|import\("(\.\.\/[^"]+)"\)/g)) {
   const rel = m[1] || m[2];
   wanted.add(path.posix.normalize(path.posix.join("bin", rel)));
@@ -51,4 +59,7 @@ if (missing.length) {
   console.error(`\nAdd the directory to "files" in package.json.`);
   process.exit(1);
 }
-console.log(`pack ok: all ${wanted.size} CLI modules are in the tarball (${shipped.size} files total).`);
+console.log(
+  `pack ok: all ${wanted.size - READ_AT_RUNTIME.length} CLI modules and ` +
+    `${READ_AT_RUNTIME.length} runtime assets are in the tarball (${shipped.size} files total).`
+);

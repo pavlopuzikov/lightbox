@@ -222,6 +222,7 @@ export async function serve(config, cwd = process.cwd(), opts = {}) {
     progress,
     handover,
     hubUrl,
+    hubPort: config.hubPort,
     bridge: config.bridge,
     inspectCommentPath,
   });

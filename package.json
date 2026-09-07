@@ -37,6 +37,7 @@
     "lightbox.config.example.json",
     "README.md",
     "CHANGELOG.md",
+    "DESIGN.md",
     "LICENSE"
   ],
   "engines": {

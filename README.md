@@ -207,6 +207,25 @@ The supervisor starts a dev server with the project's own `node_modules/.bin`,
 tails its output into the hub, and on Windows stops the whole process tree
 rather than the shell wrapper alone.
 
+## How it looks, and why
+
+lightbox is drawn as a letterpress broadside: cream stock, two inks, condensed
+capitals, and horizontal rules where another tool would put cards and badges.
+
+That is not a flourish. The overlay sits in the corner of somebody else's site
+all day and the hub is the page you flip back to between them, so the chrome
+cannot afford to look like a product UI. If you cannot tell the tool from the
+work at a glance, the tool is quietly editing your judgement of the work.
+
+One stylesheet decides all of it, [`src/design.css`](src/design.css), and both
+surfaces read it from there: the hub inlines it, and the proxy hands the same
+values to the overlay's shadow root, which inherits nothing on its own. Neither
+file is allowed to name a colour directly and a test fails if one does.
+
+[DESIGN.md](DESIGN.md) is the full system, with the measured contrast of every
+ink. It is also a fixture: `lightbox tokens --key lightbox` runs the same drift
+check against this repo that it runs against every project in your catalogue.
+
 ## Zero dependencies, checked
 
 `npm run check` fails if `package.json` grows a `dependencies` block or if
