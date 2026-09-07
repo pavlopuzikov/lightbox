@@ -27,7 +27,7 @@ test("a cell that never loaded reports every check as unmeasured, not as zero", 
   assert.equal(t.coverage.byCheck.contrast.measured, 0);
   assert.equal(t.coverage.byCheck.contrast.unmeasured, 1);
   assert.match(coverageLine(t), /INCOMPLETE/);
-  assert.match(coverageLine(t), /1 loads failed/);
+  assert.match(coverageLine(t), /1 load failed/);
 });
 
 test("a 500 counts as a failed load even though the request itself succeeded", () => {

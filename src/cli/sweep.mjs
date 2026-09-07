@@ -252,11 +252,16 @@ function measureInPage() {
       } else if (rule.cssRules) walk(rule.cssRules);
     }
   };
+  // Name the sheets that could not be read. Almost always a font CDN, whose
+  // @font-face rules declare no motion anyway, but that is a judgement for a
+  // person to make from the href rather than one to bake in by host name.
+  const unreadable = [];
   for (const sheet of doc.styleSheets) {
     try {
       walk(sheet.cssRules);
     } catch {
       unreadableSheets++;
+      if (sheet.href) unreadable.push(sheet.href.slice(0, 120));
     }
   }
   const running = typeof doc.getAnimations === "function" ? doc.getAnimations().filter((a) => a.playState === "running").length : -1;
@@ -266,7 +271,7 @@ function measureInPage() {
     overflow: { scrollWidth: html.scrollWidth, innerWidth, over: html.scrollWidth > innerWidth + 1, culprits: culprits.slice(0, 5) },
     meta,
     focus: { stops: stops.length, positiveTabindex },
-    motion: { keyframes, animated, transitions, reducedMotionRule, unreadableSheets, runningUnderReduce: running, framer },
+    motion: { keyframes, animated, transitions, reducedMotionRule, unreadableSheets, unreadable, runningUnderReduce: running, framer },
     height: html.scrollHeight,
   };
 }
@@ -664,9 +669,9 @@ export function coverageLine(t) {
   const parts = CHECKS.filter((k) => cov.byCheck[k] && cov.byCheck[k].unmeasured)
     .map((k) => `${k} ${cov.byCheck[k].unmeasured}/${cov.byCheck[k].measured + cov.byCheck[k].unmeasured}`);
   const why = [
-    cov.failedLoads ? `${cov.failedLoads} loads failed` : "",
-    cov.axeErrors ? `axe threw on ${cov.axeErrors} cells` : "",
-    cov.unreadableSheetCells ? `${cov.unreadableSheetCells} cells had unreadable stylesheets` : "",
+    cov.failedLoads ? `${cov.failedLoads} load${cov.failedLoads === 1 ? "" : "s"} failed` : "",
+    cov.axeErrors ? `axe threw on ${cov.axeErrors} cell${cov.axeErrors === 1 ? "" : "s"}` : "",
+    cov.unreadableSheetCells ? `${cov.unreadableSheetCells} cell${cov.unreadableSheetCells === 1 ? "" : "s"} had unreadable stylesheets` : "",
   ].filter(Boolean).join(", ");
   return `coverage: INCOMPLETE. Unmeasured cells: ${parts.join(", ")}${why ? ` (${why})` : ""}. A zero on those checks is not a measurement.`;
 }
@@ -814,9 +819,15 @@ async function run() {
         const r = await sweepRoute(context, base, route, width, { axe, shotsDir, timeout });
         entry.widths[width] = r;
         const c = checksOf(r);
-        const flags = [
-          !c.loaded ? "LOAD" : !c.ok ? `HTTP ${c.status}` : "",
-          c.redirected ? `-> ${r.finalUrl}` : "",
+        // A failed load contributes to no total, so it prints no per-check
+        // numbers either. An error page has its own console errors and its own
+        // axe violations, and listing them next to "HTTP 500" invites reading
+        // them as findings about the route, which is the same confusion the
+        // totals were fixed for.
+        const flags = !c.loaded || !c.ok
+          ? [!c.loaded ? "LOAD" : `HTTP ${c.status}`, "nothing on this page was measured", r.error ? trunc(r.error, 80) : ""].filter(Boolean)
+          : [
+              c.redirected ? `-> ${r.finalUrl}` : "",
           c.consoleErrors ? `err ${c.consoleErrors}` : "",
           c.failedRequests ? `req ${c.failedRequests}` : "",
           c.overflow ? `overflow +${r.overflow.scrollWidth - r.overflow.innerWidth}` : "",
@@ -825,7 +836,7 @@ async function run() {
           c.axeSerious ? `axe ${c.axeSerious}` : "",
           c.loaded && !c.metaOk ? `meta ${c.metaMissing.join(",")}` : "",
           c.loaded && !c.focusOk ? "focus" : "",
-          c.loaded && c.ok && !c.motionMeasured ? `motion UNMEASURED (${c.unreadableSheets} unreadable sheets)` : "",
+          c.loaded && c.ok && !c.motionMeasured ? `motion UNMEASURED (could not read ${((r.motion || {}).unreadable || []).join(", ") || c.unreadableSheets + " sheets"})` : "",
           c.motionOk === false ? "motion" : "",
         ].filter(Boolean);
         console.log(`${key} ${String(width).padStart(4)} ${route.path.padEnd(44)} ${String(r.ms).padStart(6)}ms  ${flags.join("  ") || "ok"}${r.error ? "  " + r.error : ""}`);
