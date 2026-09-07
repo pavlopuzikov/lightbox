@@ -122,6 +122,53 @@ export function documented(md) {
  * So a token counts as matching when the documented value is painted by any of
  * its definitions.
  */
+export function declarations(css) {
+  const out = [];
+  const stack = [];
+  let buf = "";
+  const flush = () => {
+    const m = /^\s*(--[a-z0-9-]+)\s*:\s*([\s\S]+?)\s*$/i.exec(buf);
+    buf = "";
+    if (!m) return;
+    const at = stack.filter((s) => s.startsWith("@"));
+    const sel = [...stack].reverse().find((s) => !s.startsWith("@")) || "";
+    out.push({ name: m[1], value: m[2], selector: sel, atRules: at });
+  };
+  for (let i = 0; i < css.length; i++) {
+    const c = css[i];
+    if (c === "/" && css[i + 1] === "*") {
+      const end = css.indexOf("*/", i + 2);
+      i = end === -1 ? css.length : end + 1;
+      buf = "";
+      continue;
+    }
+    if (c === "{") {
+      stack.push(buf.trim().replace(/\s+/g, " "));
+      buf = "";
+      continue;
+    }
+    if (c === "}") {
+      flush();
+      stack.pop();
+      continue;
+    }
+    if (c === ";") {
+      flush();
+      continue;
+    }
+    buf += c;
+  }
+  return out;
+}
+
+/**
+ * Where a declaration sits, in one string: "@media (min-width: 900px) .card".
+ * An empty context is a top-level `:root`, which needs no annotation.
+ */
+export function contextOf(d) {
+  return [...d.atRules, d.selector === ":root" || d.selector === "html" ? "" : d.selector].filter(Boolean).join(" ");
+}
+
 export function defined(files) {
   const out = new Map();
   for (const file of files) {
@@ -131,14 +178,20 @@ export function defined(files) {
     } catch {
       continue;
     }
-    const re = /(--[a-z0-9-]+)\s*:\s*([^;{}]+)[;}]/gi;
-    let m;
-    while ((m = re.exec(css))) {
-      const name = m[1];
-      const value = m[2].trim();
-      if (!out.has(name)) out.set(name, []);
-      const list = out.get(name);
-      if (!list.some((d) => d.value === value)) list.push({ value, file });
+    for (const d of declarations(css)) {
+      if (!out.has(d.name)) out.set(d.name, []);
+      const list = out.get(d.name);
+      // The same value in two different blocks is one value as far as drift is
+      // concerned, but the contexts are kept: a token redefined at three widths
+      // is a responsive ladder, and a single-width measurement that reports it
+      // as an override is wrong about what it saw.
+      const seen = list.find((x) => x.value === d.value);
+      const ctx = contextOf(d);
+      if (seen) {
+        if (ctx && !seen.contexts.includes(ctx)) seen.contexts.push(ctx);
+      } else {
+        list.push({ value: d.value, file, contexts: ctx ? [ctx] : [], conditional: d.atRules.length > 0 });
+      }
     }
   }
   return out;
@@ -216,8 +269,17 @@ export function check(key, dir) {
       stale.push({
         name,
         want,
-        got: defs.map((d) => (d.resolved ? `${d.value} = ${d.resolved}` : d.value)).join(" / "),
+        got: defs
+          .map((d) => {
+            const v = d.resolved ? `${d.value} = ${d.resolved}` : d.value;
+            // Naming the block matters when the definitions disagree: "in
+            // @media (prefers-color-scheme: dark)" is the difference between a
+            // stale table and a table that documented the other half.
+            return d.contexts.length ? `${v} in ${d.contexts.join(", ")}` : v;
+          })
+          .join(" / "),
         file: path.relative(dir, defs[0].file).replace(/\\/g, "/"),
+        conditionalOnly: defs.every((d) => d.conditional),
       });
     }
   }

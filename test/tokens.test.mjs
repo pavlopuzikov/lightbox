@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { check, documented, same } from "../src/tokens.mjs";
+import { check, defined, documented, same, stylesheets } from "../src/tokens.mjs";
 
 /** Build a throwaway project: a DESIGN.md and one or more stylesheets. */
 function project(md, sheets) {
@@ -112,4 +112,38 @@ test("a value cell with a trailing gloss is read, not skipped", () => {
   assert.equal(documented(md).get("--accent"), "#C8A96E");
   const dir = project(md, { "app/globals.css": ":root { --accent: #F2ECE0; }" });
   assert.equal(check("t", dir).stale.length, 1);
+});
+
+test("a token redeclared at three widths is a ladder, and the report says so", () => {
+  // A responsive ladder used to be indistinguishable from an override: the
+  // scan kept name and value and threw the block away, so `--gap: 8px` in a
+  // media query read exactly like a second `:root` fighting the first.
+  const dir = project(TABLE("| `--gap` | `24px` | spacing |"), {
+    "app.css": ":root { --gap: 8px; }\n@media (min-width: 768px) { :root { --gap: 16px; } }\n@media (min-width: 1200px) { :root { --gap: 24px; } }\n",
+  });
+  const r = check("t", dir);
+  assert.equal(r.stale.length, 0, "24px is painted at the widest step, so nothing has drifted");
+
+  const defs = defined(stylesheets(dir));
+  const gap = defs.get("--gap");
+  assert.equal(gap.length, 3);
+  assert.deepEqual(gap.map((d) => d.conditional), [false, true, true]);
+  assert.deepEqual(gap[2].contexts, ["@media (min-width: 1200px)"]);
+});
+
+test("the drift report names the block a value came from", () => {
+  const dir = project(TABLE("| `--bg` | `#ffffff` | page |"), {
+    "app.css": ":root { --bg: #111111; }\n@media (prefers-color-scheme: dark) { :root { --bg: #000000; } }\n",
+  });
+  const r = check("t", dir);
+  assert.equal(r.stale.length, 1);
+  assert.match(r.stale[0].got, /#000000 in @media \(prefers-color-scheme: dark\)/);
+  assert.equal(r.stale[0].conditionalOnly, false, "one of the two definitions is unconditional");
+});
+
+test("a declaration inside a comment is not a declaration", () => {
+  const dir = project(TABLE("| `--bg` | `#ffffff` | page |"), {
+    "app.css": "/* --bg: #000000; the old value */\n:root { --bg: #ffffff; }\n",
+  });
+  assert.equal(check("t", dir).stale.length, 0);
 });

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checksOf, totalsOf, coverageLine, coverageShort } from "../src/cli/sweep.mjs";
+import { checksOf, totalsOf, coverageLine, coverageShort, provenanceLines } from "../src/cli/sweep.mjs";
 
 /** One width cell as sweepRoute records it, with everything passing. */
 const cell = (over = {}) => ({
@@ -102,4 +102,61 @@ test("real failures still count, so unmeasured is not a way to hide findings", (
   assert.equal(t.contrast, 7);
   assert.equal(t.axeSerious, 2);
   assert.equal(t.coverage.complete, true);
+});
+
+test("contrast provenance says which ancestor painted the background, and through what", () => {
+  const lines = provenanceLines({
+    axe: {
+      provenance: [
+        {
+          target: "p.label",
+          found: true,
+          sel: "p.label",
+          color: "rgb(255, 255, 255)",
+          ownBackground: "rgba(0, 0, 0, 0)",
+          backgroundFrom: "div.luxury-card",
+          background: "rgb(255, 255, 255)",
+          fadedBy: null,
+          animatingBy: null,
+          varChain: [{ rule: ".luxury-card", prop: "background", declared: "var(--bg-card)", resolves: [{ name: "--bg-card", computed: "#fff" }] }],
+          unreadableSheets: 0,
+        },
+      ],
+    },
+  });
+  assert.equal(lines.length, 1);
+  assert.match(lines[0], /from div\.luxury-card/);
+  assert.match(lines[0], /var\(--bg-card\) on \.luxury-card which computed #fff/);
+});
+
+test("a reading taken mid-fade is flagged as doubtful, not reported as a finding", () => {
+  // The afternoon this is for: a white card chased through five browser probes
+  // on a theory about animation, which turned out to be wrong. The measurement
+  // now carries whether it had any reason to be doubted.
+  const lines = provenanceLines({
+    axe: {
+      provenance: [
+        {
+          target: "p",
+          found: true,
+          sel: "p",
+          color: "#fff",
+          backgroundFrom: "div.card",
+          background: "#fff",
+          fadedBy: { sel: "div.card", opacity: "0.4" },
+          animatingBy: "div.card",
+          varChain: [],
+          unreadableSheets: 2,
+        },
+      ],
+    },
+  });
+  assert.match(lines[0], /mid-fade: div\.card at opacity 0\.4/);
+  assert.match(lines[0], /still animating: div\.card/);
+  assert.match(lines[0], /2 stylesheets could not be read/);
+});
+
+test("a cell with no contrast failures prints no provenance", () => {
+  assert.deepEqual(provenanceLines(cell()), []);
+  assert.deepEqual(provenanceLines({ error: "net::ERR_CONNECTION_REFUSED" }), []);
 });

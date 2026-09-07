@@ -288,6 +288,128 @@ function firstStopInPage() {
   };
 }
 
+/**
+ * Answer the question a contrast failure always raises next: where did that
+ * background come from?
+ *
+ * axe reports the composited pair, "1.71 (foreground #ffffff, background
+ * #ffffff)", and stops there. The background is usually painted by some
+ * ancestor, often through a custom property, and finding out which one took
+ * five browser probes by hand on one white card during the audit. Everything
+ * those probes asked is asked here instead, at the moment of the failure:
+ *
+ *   - the element's own background, and whether it is transparent
+ *   - the nearest ancestor that actually paints, and its selector
+ *   - whether any ancestor was mid-fade (opacity < 1) or still animating,
+ *     which is the difference between a real failure and a measurement taken
+ *     too early
+ *   - the custom-property chain, when the background was authored as a var()
+ *
+ * Runs in the page. `targets` is a list of axe target selectors.
+ */
+function contrastProvenanceInPage(targets) {
+  const sel = (el) => {
+    if (!el) return "";
+    const cls = typeof el.className === "string" && el.className ? "." + el.className.trim().split(/\s+/).slice(0, 2).join(".") : "";
+    return el.tagName.toLowerCase() + (el.id ? "#" + el.id : "") + cls;
+  };
+  const opaque = (v) => v && v !== "transparent" && !/^rgba\(.*,\s*0\s*\)$/.test(v);
+
+  /**
+   * The authored declaration behind a computed background, by asking the
+   * stylesheets rather than the computed style, which has already resolved
+   * every var() away. A sheet the page cannot read is reported, not skipped:
+   * "no var() found" and "could not look" are different answers.
+   */
+  const authored = (el) => {
+    let unreadable = 0;
+    const hits = [];
+    for (const sheet of Array.from(document.styleSheets)) {
+      let rules;
+      try {
+        rules = sheet.cssRules;
+      } catch {
+        unreadable++;
+        continue;
+      }
+      for (const rule of Array.from(rules || [])) {
+        if (!rule.selectorText || !rule.style) continue;
+        let matches = false;
+        try {
+          matches = el.matches(rule.selectorText);
+        } catch {
+          continue;
+        }
+        if (!matches) continue;
+        for (const prop of ["background-color", "background"]) {
+          const v = rule.style.getPropertyValue(prop);
+          if (v && v.includes("var(")) hits.push({ rule: rule.selectorText, prop, declared: v.trim() });
+        }
+      }
+    }
+    return { hits, unreadable };
+  };
+
+  const out = [];
+  for (const target of targets.slice(0, 12)) {
+    let el = null;
+    try {
+      el = document.querySelector(target);
+    } catch {
+      /* axe targets are valid selectors, but a shadow-DOM target is an array */
+    }
+    if (!el) {
+      out.push({ target, found: false });
+      continue;
+    }
+    const cs = getComputedStyle(el);
+    const own = cs.backgroundColor;
+
+    let painter = null;
+    let fadedBy = null;
+    let animatingBy = null;
+    for (let a = el; a && a !== document.documentElement.parentNode; a = a.parentElement) {
+      const acs = getComputedStyle(a);
+      if (!painter && a !== el && opaque(acs.backgroundColor)) painter = { el: a, sel: sel(a), value: acs.backgroundColor };
+      if (!fadedBy && parseFloat(acs.opacity) < 1) fadedBy = { sel: sel(a), opacity: acs.opacity };
+      if (!animatingBy && typeof a.getAnimations === "function" && a.getAnimations().some((an) => an.playState === "running")) {
+        animatingBy = sel(a);
+      }
+    }
+
+    // Read the var() off whichever element actually painted. Asking the
+    // failing element about a background it does not have is how the chain
+    // came back empty on the one case this was built for.
+    const varsOn = opaque(own) ? el : painter ? painter.el : el;
+    const { hits, unreadable } = authored(varsOn);
+    const chain = [];
+    for (const h of hits.slice(0, 2)) {
+      const names = (h.declared.match(/var\(\s*(--[a-z0-9-]+)/gi) || []).map((s) => s.replace(/var\(\s*/i, ""));
+      chain.push({
+        rule: h.rule.slice(0, 120),
+        prop: h.prop,
+        declared: h.declared.slice(0, 120),
+        resolves: names.map((n) => ({ name: n, computed: getComputedStyle(varsOn).getPropertyValue(n).trim() })),
+      });
+    }
+
+    out.push({
+      target,
+      found: true,
+      sel: sel(el),
+      color: cs.color,
+      ownBackground: own,
+      backgroundFrom: opaque(own) ? "self" : painter ? painter.sel : "nothing paints an opaque background above it",
+      background: opaque(own) ? own : painter ? painter.value : null,
+      fadedBy,
+      animatingBy,
+      varChain: chain,
+      unreadableSheets: unreadable,
+    });
+  }
+  return out;
+}
+
 /* ------------------------------------------------------------------ *
  * One route at one width
  * ------------------------------------------------------------------ */
@@ -395,12 +517,18 @@ async function sweepRoute(context, base, route, width, opts) {
           tags: v.tags.filter((t) => /^wcag|best-practice/.test(t)),
           nodes: v.nodes.length,
           target: v.nodes[0] ? String(v.nodes[0].target[0]).slice(0, 120) : "",
+          targets: v.id === "color-contrast" ? v.nodes.map((n) => String(n.target[0]).slice(0, 200)).slice(0, 12) : undefined,
           summary: v.nodes[0] && v.nodes[0].failureSummary ? v.nodes[0].failureSummary.split("\n").slice(0, 2).join(" ").slice(0, 200) : "",
         }));
       });
       const contrast = axe.filter((v) => v.id === "color-contrast").reduce((n, v) => n + v.nodes, 0);
       const serious = axe.filter((v) => v.id !== "color-contrast" && (v.impact === "serious" || v.impact === "critical"));
       out.axe = { violations: axe, contrast, seriousOrCritical: serious.length };
+      // "1.71 on #ffffff" is where the guessing starts. Record the ancestor
+      // that painted that background and the custom property it came through,
+      // so the next person reads the answer instead of probing for it.
+      const targets = axe.filter((v) => v.id === "color-contrast").flatMap((v) => v.targets || []);
+      if (targets.length) out.axe.provenance = await page.evaluate(contrastProvenanceInPage, targets);
     } catch (e) {
       out.axe = { violations: [], contrast: 0, seriousOrCritical: 0, error: trunc(e.message, 160) };
     }
@@ -485,6 +613,39 @@ export function checksOf(w) {
     unreadableSheets: motion.unreadableSheets || 0,
     motionOk: !motionMeasured ? null : !declared || (motion.reducedMotionRule && (motion.runningUnderReduce || 0) === 0),
   };
+}
+
+/**
+ * The contrast provenance, in as few lines as it can be said.
+ *
+ * Printed under the cell it belongs to, because a contrast count on its own
+ * sends someone to a browser to find out where the background came from, and
+ * that answer is already in the JSON by the time the count is printed.
+ */
+export function provenanceLines(w) {
+  const rows = (w && w.axe && w.axe.provenance) || [];
+  const out = [];
+  for (const p of rows.slice(0, 4)) {
+    if (!p.found) {
+      out.push(`contrast ${p.target}: element was gone by the time it was probed`);
+      continue;
+    }
+    const bg = p.background ? `${p.background} from ${p.backgroundFrom}` : p.backgroundFrom;
+    const via = p.varChain.length
+      ? `, ${p.varChain[0].prop}: ${p.varChain[0].declared} on ${p.varChain[0].rule}` +
+        (p.varChain[0].resolves.length ? ` which computed ${p.varChain[0].resolves.map((r) => r.computed).join(", ")}` : "")
+      : "";
+    // A fade or a running animation is a reason to distrust the reading, not
+    // a finding. Chasing one of these by hand cost an afternoon and a revert.
+    const doubt = [
+      p.fadedBy ? `mid-fade: ${p.fadedBy.sel} at opacity ${p.fadedBy.opacity}` : "",
+      p.animatingBy ? `still animating: ${p.animatingBy}` : "",
+      p.unreadableSheets ? `${p.unreadableSheets} stylesheets could not be read` : "",
+    ].filter(Boolean);
+    out.push(`contrast ${p.sel}: ${p.color} on ${bg}${via}${doubt.length ? `  [${doubt.join("; ")}]` : ""}`);
+  }
+  if (rows.length > 4) out.push(`contrast: ${rows.length - 4} more nodes in the JSON`);
+  return out;
 }
 
 const CHECKS = ["console", "requests", "overflow", "contrast", "axe", "meta", "focus", "motion"];
@@ -668,6 +829,7 @@ async function run() {
           c.motionOk === false ? "motion" : "",
         ].filter(Boolean);
         console.log(`${key} ${String(width).padStart(4)} ${route.path.padEnd(44)} ${String(r.ms).padStart(6)}ms  ${flags.join("  ") || "ok"}${r.error ? "  " + r.error : ""}`);
+        for (const line of provenanceLines(r)) console.log(`      ${line}`);
       }
       await context.close();
     }
