@@ -36,6 +36,7 @@
     "src/",
     "lightbox.config.example.json",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "engines": {
@@ -52,6 +53,7 @@
     "tokens": "node bin/lightbox.mjs tokens",
     "handover": "node bin/lightbox.mjs handover",
     "check": "node scripts/check.mjs",
+    "check:pack": "node scripts/check-pack.mjs",
     "test": "node --test"
   },
   "peerDependenciesMeta": {

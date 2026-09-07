@@ -10,7 +10,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
-        node: [18, 22]
+        node: [18, 20, 22]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -23,3 +23,10 @@ jobs:
       # from a bare clone; check.mjs is what keeps that true.
       - run: npm run check
       - run: npm test
+
+      # The audit subcommands lived in scripts/, which `files` does not ship,
+      # so `npm pack` produced a tarball with no sweep, no tokens and no
+      # handover while the README documented all three. Assert the tarball
+      # carries every file the CLI dispatches, rather than trusting that the
+      # move stays put.
+      - run: node scripts/check-pack.mjs

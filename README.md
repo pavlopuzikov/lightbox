@@ -59,26 +59,56 @@ inspector, and `serve` says so once at start-up.
 | `lightbox init <dir...>` | Scans each directory two levels deep (`apps/` and `packages/` included) and writes `lightbox.config.json` |
 | `lightbox list` | What the config resolves to: port, runner, page count, and which projects still need `npm install` |
 | `lightbox serve` | The hub and every review port. Dev servers start when a project is opened |
+| `lightbox --help` | All of the above, plus what the exit codes mean |
 
-### Scripts for the audit loop
+### The audit loop
 
-These live in `scripts/` and run with plain `node`. They keep the
-zero-dependency promise: the sweep borrows Playwright and axe-core from a
-directory you point it at (`--playwright <dir>`, or `LIGHTBOX_PLAYWRIGHT`),
-typically some other project's `node_modules`.
+One CLI, and every command resolves `lightbox.config.json` and `.lightbox/`
+from the directory you run it in, never from wherever lightbox is installed.
 
-| Script | Does |
+`sweep` and `tokens --runtime` need Playwright and axe-core. lightbox does not
+depend on them: they are resolved when the command runs, from your own project
+(`npm i -D playwright axe-core && npx playwright install chromium`), or from a
+directory you name with `--playwright <dir>` or `LIGHTBOX_PLAYWRIGHT` if you
+would rather borrow another project's copy than install a second browser.
+
+| Command | Does |
 | --- | --- |
-| `scripts/sweep.mjs --key <key>` | Loads every route at 390, 768 and 1440 through the review port with the walker left out (the proxy honours an `x-lightbox-bare` request header) and records status, console errors, failed requests, horizontal overflow with its culprits, axe WCAG AA violations, `lang`/title/description/viewport/`h1`, first Tab stop and its focus ring, declared motion against `prefers-reduced-motion`, and a full-page screenshot with its hash. Writes `.lightbox/audit/<key>.json` and `.lightbox/shots/<key>/before/`. `--label after` writes the second set |
-| `scripts/sweep.mjs diff before.json after.json` | Check by check, route by route: what got worse, what got better, which screenshots changed. Exits 1 on anything worse |
-| `scripts/sweep.mjs summary *.json` | One markdown table across projects |
-| `scripts/sweep.mjs login --key <key>` | Opens a headed browser on the project's login page, waits for you to sign in, and saves the storage state to reuse with `--storage-state` |
-| `scripts/handover.mjs` | Refreshes `.lightbox/handover.json` from git (audit branch, commits above its base) and the sweep totals, then writes `.lightbox/HANDOVER.md`. Hand-written fields survive: notes, proposals, Lighthouse numbers, approval |
-| `scripts/reviews.mjs drain` | Copies every review the bridge holds into `.lightbox/reviews/<key>/` with its screenshots. The bridge keeps only its last twenty, so run this at the start of every coding batch |
+| `lightbox sweep --key <key>` | Loads every route at 390, 768 and 1440 through the review port with the walker left out (the proxy honours an `x-lightbox-bare` request header) and records status, console errors, failed requests, horizontal overflow with its culprits, axe WCAG AA violations and where each contrast failure's background came from, `lang`/title/description/viewport/`h1`, first Tab stop and its focus ring, declared motion against `prefers-reduced-motion`, and a full-page screenshot with its hash. Writes `.lightbox/audit/<key>.json` and `.lightbox/shots/<key>/before/`. `--label after` writes the second set |
+| `lightbox diff before.json after.json` | Check by check, route by route: what got worse, what got better, which screenshots changed. Exits 1 on anything worse |
+| `lightbox summary *.json` | One markdown table across projects |
+| `lightbox login --key <key>` | Opens a headed browser on the project's login page, waits for you to sign in, and saves the storage state to reuse with `--storage-state` |
+| `lightbox tokens` | Compares each project's `DESIGN.md` token table against the values in its own stylesheets. Exits 1 on drift |
+| `lightbox tokens --runtime` | Loads a route in a browser and compares what each token computes to against what the project declares. Answers the question the file comparison cannot: is something outside this project overriding it |
+| `lightbox handover` | Refreshes `.lightbox/handover.json` from git (the `auditBranch`, and its commits above its base) and the sweep totals, then writes `.lightbox/HANDOVER.md`. Hand-written fields survive: notes, proposals, Lighthouse numbers, approval |
+| `lightbox reviews drain` | Copies every review the bridge holds into `.lightbox/reviews/<key>/` with its screenshots. The bridge keeps only its last twenty, so run this at the start of every coding batch |
 
 The hub shows the handover line under each project (branch, commit count,
 sweep totals, proposals waiting) and an **Approve** action. `approved: true` in
 `handover.json` is the one signal a push step is meant to read.
+
+### Nothing measured is reported as zero
+
+Every check a sweep makes is three-valued: it passed, it failed, or it was
+never measured. A route that 500s, an axe run that threw, a stylesheet the
+page could not read: each of those used to produce the same output as a clean
+page, because the counter it would have incremented stayed at zero.
+
+So each sweep carries a `coverage` block saying how many of its cells actually
+produced a measurement, per check, and the summary line says so out loud:
+
+```
+coverage: INCOMPLETE. Unmeasured cells: contrast 13/15, axe 13/15
+(13 loads failed). A zero on those checks is not a measurement.
+```
+
+`lightbox diff` will not call a check improved when either side of it was
+unmeasured, and `handover` prints `not comparable` rather than `1034 to 0`.
+
+Exit codes follow from that. **1** means a real finding: token drift, or a
+regression against the previous sweep. **2** means the run could not measure
+what it was asked to measure, which is not a pass. `sweep run` exits 2 on
+incomplete coverage unless you pass `--allow-partial`.
 
 ## Config
 
@@ -180,9 +210,19 @@ rather than the shell wrapper alone.
 ## Zero dependencies, checked
 
 `npm run check` fails if `package.json` grows a `dependencies` block or if
-`src/` or `bin/` import anything that is not a `node:` builtin. `npm test` runs
-the `node --test` suite: route discovery on a fixture tree, port assignment,
-injection placement, and `Range` handling.
+`src/` or `bin/` import anything that is not a `node:` builtin. Playwright and
+axe-core are optional peers, resolved when a command runs rather than imported,
+so they do not break that.
+
+`npm run check:pack` asserts that `npm pack` ships every module the CLI
+dispatches. That check exists because for the whole life of 0.1.x it did not:
+the audit commands lived in `scripts/`, which `files` does not ship, so an
+installed copy had no `sweep`, no `tokens` and no `handover` while this README
+documented all three.
+
+`npm test` runs the `node --test` suite: route discovery on a fixture tree, port
+assignment, injection placement, `Range` handling, coverage accounting, the
+supervisor's health checks and adoption, and the hub's POST allowlist.
 
 ## License
 
