@@ -5,6 +5,9 @@
  *   lightbox init [dir...]   write a config by looking at directories
  *   lightbox list            what the config resolves to, without serving
  *   lightbox serve           the hub and every review port
+ *
+ *   Run `lightbox --help` for the audit subcommands (sweep, diff, tokens,
+ *   handover, reviews), which live in src/cli/.
  */
 
 import fs from "node:fs";
@@ -95,6 +98,48 @@ async function cmdServe() {
   process.on("SIGTERM", bye);
 }
 
+const HELP = `lightbox: run every front end you have built, all at once, each carrying the
+same review overlay.
+
+  lightbox init <dir...>        write a config by scanning directories
+  lightbox list                 what the config resolves to, without serving
+  lightbox serve                the hub and every review port
+
+  lightbox sweep [--key <k>]    measure routes at three widths and write
+                                .lightbox/audit/<key>.json
+  lightbox diff <a> <b>         compare two sweeps; exit 1 if anything regressed
+  lightbox summary <file>       re-print a sweep's one-line result
+  lightbox login --key <k>      save a storage state for routes behind auth
+
+  lightbox tokens [--key <k>]   DESIGN.md token drift; exit 1 on drift
+  lightbox handover             refresh .lightbox/handover.json and HANDOVER.md
+  lightbox reviews drain|list   move stored review notes onto disk
+
+Config and .lightbox/ always resolve from the current working directory, not
+from wherever lightbox itself is installed.
+
+sweep needs Playwright and axe-core, which lightbox does not depend on. Install
+them where you run it (npm i -D playwright axe-core && npx playwright install
+chromium), or point at another project's copy with --playwright <dir> or
+LIGHTBOX_PLAYWRIGHT.
+
+Exit codes: 1 means a real finding (drift, a regression). 2 means the run could
+not measure what it was asked to measure, which is not the same as a pass.`;
+
+/** Subcommands that live in src/cli/, loaded only when asked for. */
+async function delegate(name, rest) {
+  if (name === "sweep") return (await import("../src/cli/sweep.mjs")).main("run", rest);
+  if (name === "diff" || name === "summary" || name === "login") {
+    return (await import("../src/cli/sweep.mjs")).main(name, rest);
+  }
+  if (name === "tokens") return (await import("../src/cli/tokens.mjs")).main(rest);
+  if (name === "handover") return (await import("../src/cli/handover.mjs")).main(rest);
+  if (name === "reviews") return (await import("../src/cli/reviews.mjs")).main(rest);
+  return undefined;
+}
+
+const DELEGATED = ["sweep", "diff", "summary", "login", "tokens", "handover", "reviews"];
+
 switch (cmd) {
   case "init":
     await cmdInit();
@@ -105,6 +150,28 @@ switch (cmd) {
   case "serve":
     await cmdServe();
     break;
+  case "help":
+  case "--help":
+  case "-h":
+    console.log(HELP);
+    break;
+  case "--version":
+  case "-v": {
+    const pkg = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+    console.log(pkg.version);
+    break;
+  }
   default:
-    die(`Unknown command "${cmd}". Try init, list or serve.`);
+    if (DELEGATED.includes(cmd)) {
+      // A delegated command owns its own exit code, and 2 is meaningful.
+      const code = await delegate(cmd, rest).catch((e) => {
+        // A setup problem the person can fix gets the instruction on its own.
+        // A stack trace through lightbox's own frames only buries it.
+        console.error(e.expected ? e.message : e.stack || e.message);
+        return 1;
+      });
+      if (typeof code === "number" && code !== 0) process.exit(code);
+    } else {
+      die(`Unknown command "${cmd}".\n\n${HELP}`);
+    }
 }

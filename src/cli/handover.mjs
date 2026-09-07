@@ -3,7 +3,7 @@
  * Refresh .lightbox/handover.json from git and the sweep output, and write the
  * human copy, .lightbox/HANDOVER.md.
  *
- *   node scripts/handover.mjs [--key <key>] [--branch audit/front-end-2026-09]
+ *   lightbox handover [--key <key>] [--branch <audit branch>]
  *
  * For each project on disk with a git checkout it records the current branch,
  * the audit branch's commits above its base, and the totals from
@@ -16,20 +16,23 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
-import { loadConfig, buildCatalogue } from "../src/catalogue.mjs";
-import { Handover, summarise, metric } from "../src/handover.mjs";
+import { pathToFileURL } from "node:url";
+import { loadConfig, buildCatalogue } from "../catalogue.mjs";
+import { Handover, summarise, metric } from "../handover.mjs";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.dirname(HERE);
+/** Config and state come from the working directory. See src/cli/sweep.mjs. */
+const ROOT = process.cwd();
 
-const args = {};
-for (let i = 2; i < process.argv.length; i++) {
-  const a = process.argv[i];
-  if (a.startsWith("--")) args[a.slice(2)] = process.argv[i + 1] && !process.argv[i + 1].startsWith("--") ? process.argv[++i] : true;
+let args = {};
+function parseArgs(argv) {
+  const out = {};
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a.startsWith("--")) out[a.slice(2)] = argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[++i] : true;
+  }
+  return out;
 }
-const BRANCH = args.branch || "audit/front-end-2026-09";
-const GROUP_ORDER = ["personal", "ventures", "tools", "work"];
+args = parseArgs(process.argv.slice(2));
 
 function git(dir, ...a) {
   try {
@@ -47,7 +50,7 @@ function readJson(file) {
   }
 }
 
-function gitFacts(project, entry) {
+function gitFacts(project, entry, BRANCH) {
   if (!project.exists || !fs.existsSync(path.join(project.dir, ".git")) && git(project.dir, "rev-parse", "--git-dir") === null) {
     return { current: null, branch: null, commits: [], base: entry?.base || null };
   }
@@ -84,15 +87,22 @@ function sweepFacts(key) {
   return { sweep: pick(before), sweepAfter: pick(after) };
 }
 
-async function main() {
+export async function main(argv) {
+  if (argv) args = parseArgs(argv);
   const { config } = await loadConfig(ROOT);
   const { projects, groups } = buildCatalogue(config);
+
+  // Both of these used to be hardcoded personal-workflow constants: a
+  // date-stamped branch name and a fixed group list that named my own
+  // groups. The config already carries the answer to each.
+  const branch = args.branch || config.auditBranch || "audit/front-end";
+  const GROUP_ORDER = groups.map((g) => g.id);
   const handover = new Handover(path.join(ROOT, ".lightbox", "handover.json"));
   const wanted = args.key ? projects.filter((p) => p.key === args.key) : projects;
 
   for (const p of wanted) {
     const entry = handover.get(p.key);
-    const g = gitFacts(p, entry);
+    const g = gitFacts(p, entry, branch);
     const s = sweepFacts(p.key);
     handover.set(p.key, {
       currentBranch: g.current,
@@ -114,7 +124,7 @@ async function main() {
     return i === -1 ? GROUP_ORDER.length : i;
   };
   const sorted = [...projects].sort((a, b) => order(a) - order(b) || a.name.localeCompare(b.name));
-  const lines = ["# Front-end audit 2026-09, handover", "", `Refreshed ${new Date().toISOString().slice(0, 16).replace("T", " ")} by scripts/handover.mjs. Hand-written fields (status, note, proposals, Lighthouse, approval) survive a refresh.`, ""];
+  const lines = [`# ${branch}, handover`, "", `Refreshed ${new Date().toISOString().slice(0, 16).replace("T", " ")} by \`lightbox handover\`. Hand-written fields (status, note, proposals, Lighthouse, approval) survive a refresh.`, ""];
   let group = null;
   for (const p of sorted) {
     if (p.group !== group) {
@@ -166,7 +176,9 @@ async function main() {
   console.log(`\nwrote ${path.relative(process.cwd(), md)}`);
 }
 
-main().catch((e) => {
-  console.error(e.stack || e.message);
-  process.exit(1);
-});
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
+  main().catch((e) => {
+    console.error(e.stack || e.message);
+    process.exit(1);
+  });
+}

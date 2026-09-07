@@ -2,10 +2,10 @@
 /**
  * The measurement pass.
  *
- *   node scripts/sweep.mjs --key <key> [--widths 390,768,1440] [--playwright <dir>]
- *   node scripts/sweep.mjs diff <before.json> <after.json>
- *   node scripts/sweep.mjs summary <a.json> [<b.json> ...]
- *   node scripts/sweep.mjs login --key <key> [--path /login]
+ *   lightbox sweep --key <key> [--widths 390,768,1440] [--playwright <dir>]
+ *   lightbox diff <before.json> <after.json>
+ *   lightbox summary <a.json> [<b.json> ...]
+ *   lightbox login --key <key> [--path /login]
  *
  * For every route of one project, at every width, through the project's review
  * port with the walker left out (the proxy honours `x-lightbox-bare`), it
@@ -14,10 +14,10 @@
  * violations, the document metadata, keyboard focus, declared motion against
  * the reduced-motion preference, and a full-page screenshot with its hash.
  *
- * lightbox itself has no dependencies, and this script keeps that promise: it
- * borrows Playwright and axe-core from a directory you name (`--playwright`, or
- * LIGHTBOX_PLAYWRIGHT), typically some other project's node_modules. Nothing
- * is installed here.
+ * lightbox itself has no runtime dependencies, and this keeps that promise:
+ * Playwright and axe-core are resolved at call time, from your working
+ * directory if you installed them there, or from a directory you name
+ * (`--playwright`, or LIGHTBOX_PLAYWRIGHT). Nothing is installed here.
  *
  * Output is one JSON per project under .lightbox/audit/<key>.json and the
  * screenshots under .lightbox/shots/<key>/<label>/. `diff` compares two such
@@ -30,11 +30,18 @@ import path from "node:path";
 import crypto from "node:crypto";
 import readline from "node:readline";
 import { pathToFileURL, fileURLToPath } from "node:url";
-import { loadConfig, buildCatalogue } from "../src/catalogue.mjs";
-import { routesFor } from "../src/routes.mjs";
+import { createRequire } from "node:module";
+import { loadConfig, buildCatalogue } from "../catalogue.mjs";
+import { routesFor } from "../routes.mjs";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.dirname(HERE);
+/**
+ * Config and state resolve from the working directory, never from the package.
+ *
+ * `serve` always did this and the audit scripts never did, so an installed copy
+ * would have read lightbox.config.json out of node_modules and tried to write
+ * .lightbox/ in there. There is one working directory now, and it is yours.
+ */
+const ROOT = process.cwd();
 const FIXED_TIME = new Date("2026-09-04T12:00:00Z");
 
 /* ------------------------------------------------------------------ *
@@ -58,8 +65,8 @@ function parseArgs(argv) {
   return args;
 }
 
-const args = parseArgs(process.argv.slice(2));
-const sub = args._[0] && !args._[0].endsWith(".json") ? args._[0] : "run";
+let args = parseArgs(process.argv.slice(2));
+let sub = args._[0] && !args._[0].endsWith(".json") ? args._[0] : "run";
 
 /* ------------------------------------------------------------------ *
  * Helpers
@@ -78,16 +85,48 @@ function trunc(s, n = 300) {
   return s.length > n ? s.slice(0, n) + "..." : s;
 }
 
+/** Tag an error as a fixable setup problem rather than a bug in lightbox. */
+export function expected(err) {
+  err.expected = true;
+  return err;
+}
+
+/**
+ * Find playwright or axe-core, in the order that makes the common case work.
+ *
+ *   1. --playwright <dir> or LIGHTBOX_PLAYWRIGHT, kept because borrowing some
+ *      other project's node_modules is a legitimate way to avoid a second copy
+ *      of a browser, and the audit branches were all swept that way.
+ *   2. Normal resolution from the working directory. This is the case that did
+ *      not exist: a user who ran `npm i -D playwright axe-core` still had to
+ *      pass a flag pointing at their own project.
+ *
+ * Neither is a static bare import, so scripts/check.mjs and the
+ * no-runtime-dependencies promise both still hold.
+ */
 async function borrow(name, from) {
   const dir = from || process.env.LIGHTBOX_PLAYWRIGHT;
-  if (!dir) {
-    throw new Error(
-      `No --playwright <dir> and no LIGHTBOX_PLAYWRIGHT. Point it at a directory whose node_modules holds ${name}.`
+  if (dir) {
+    const mod = path.join(dir, "node_modules", name);
+    if (!fs.existsSync(mod)) throw expected(new Error(`${name} is not under ${dir}/node_modules`));
+    return mod;
+  }
+
+  const req = createRequire(path.join(ROOT, "noop.js"));
+  try {
+    return path.dirname(req.resolve(`${name}/package.json`));
+  } catch {
+    // `expected` marks this as something the person running lightbox can fix,
+    // so the CLI prints the instruction rather than a stack trace through it.
+    throw expected(new Error(
+      `sweep needs ${name} and could not find it.\n` +
+        `  Install both where you run lightbox:\n` +
+        `    npm i -D playwright axe-core && npx playwright install chromium\n` +
+        `  Or borrow another project's copy:\n` +
+        `    --playwright <dir whose node_modules holds them>, or LIGHTBOX_PLAYWRIGHT`
+      )
     );
   }
-  const mod = path.join(dir, "node_modules", name);
-  if (!fs.existsSync(mod)) throw new Error(`${name} is not under ${dir}/node_modules`);
-  return mod;
 }
 
 async function loadPlaywright(from) {
@@ -800,14 +839,29 @@ async function login() {
 
 /* ------------------------------------------------------------------ */
 
-/* Only run as a CLI; `checksOf` is importable without side effects. */
+const SUBCOMMANDS = { run, diff, summary, login };
+
+/**
+ * Entry point for `bin/lightbox.mjs`. `name` is the subcommand the CLI already
+ * matched, so `lightbox sweep --key x` and `lightbox diff a.json b.json` both
+ * land here without the caller re-deriving it from argv.
+ */
+export async function main(name, argv) {
+  args = parseArgs(argv);
+  sub = name;
+  const fn = SUBCOMMANDS[name];
+  if (!fn) throw new Error(`unknown sweep subcommand "${name}"`);
+  return fn();
+}
+
+/* Still runnable directly. `checksOf` stays importable without side effects. */
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
-  const main = { run, diff, summary, login }[sub];
-  if (!main) {
+  const fn = SUBCOMMANDS[sub];
+  if (!fn) {
     console.error(`unknown subcommand "${sub}"`);
     process.exit(2);
   }
-  Promise.resolve().then(main).catch((e) => {
+  Promise.resolve().then(fn).catch((e) => {
     console.error(e.stack || e.message);
     process.exit(1);
   });

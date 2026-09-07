@@ -5,6 +5,9 @@
   "bridge": "http://127.0.0.1:7391",
   "inspectComment": "auto",
 
+  "_comment_auditBranch": "The branch `lightbox handover` looks for in each project when listing the fix commits above its base. Override per run with --branch.",
+  "auditBranch": "audit/front-end",
+
   "_comment_scan": "Point at a directory and lightbox works out what is in it: package.json decides the runner, an .html file makes it a static site, anything else is skipped. depth 2 also looks one level into apps/ and packages/ for monorepos.",
   "scan": [
     { "dir": "C:/Users/you/projects", "depth": 2, "group": "projects", "exclude": ["archive"] }

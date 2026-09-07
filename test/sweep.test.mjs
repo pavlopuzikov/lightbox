@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checksOf, totalsOf, coverageLine, coverageShort } from "../scripts/sweep.mjs";
+import { checksOf, totalsOf, coverageLine, coverageShort } from "../src/cli/sweep.mjs";
 
 /** One width cell as sweepRoute records it, with everything passing. */
 const cell = (over = {}) => ({

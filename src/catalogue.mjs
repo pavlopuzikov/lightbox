@@ -22,6 +22,9 @@ export const DEFAULTS = {
   upstreamPortBase: 3100,
   bridge: "http://127.0.0.1:7391",
   inspectComment: "auto",
+  // The branch `lightbox handover` reads fix commits from, in every project.
+  // It used to be a date-stamped constant compiled into the script.
+  auditBranch: "audit/front-end",
   scan: [],
   projects: [],
   groups: [],

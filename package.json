@@ -48,15 +48,24 @@
     "start": "node bin/lightbox.mjs serve",
     "init": "node bin/lightbox.mjs init",
     "list": "node bin/lightbox.mjs list",
+    "sweep": "node bin/lightbox.mjs sweep",
+    "tokens": "node bin/lightbox.mjs tokens",
+    "handover": "node bin/lightbox.mjs handover",
     "check": "node scripts/check.mjs",
     "test": "node --test"
   },
   "peerDependenciesMeta": {
     "inspect-comment": {
       "optional": true
+    },
+    "playwright": {
+      "optional": true
+    },
+    "axe-core": {
+      "optional": true
     }
   },
-  "_comment_dependencies": "There are none, and that is a constraint rather than an accident. lightbox runs from a clone with nothing installed, which is the whole point of a tool whose job is to boot other people's projects. inspect-comment is an optional peer: found if installed, skipped with a warning if not.",
+  "_comment_dependencies": "There are none, and that is a constraint rather than an accident. lightbox runs from a clone with nothing installed, which is the whole point of a tool whose job is to boot other people's projects. inspect-comment is an optional peer: found if installed, skipped with a warning if not. playwright and axe-core are optional peers too, needed only by `lightbox sweep`, resolved at call time from the working directory rather than imported.",
   "_comment_check": "scripts/check.mjs fails the build if package.json grows a `dependencies` block or src/ grows a bare import specifier.",
   "publishConfig": {
     "access": "public"
