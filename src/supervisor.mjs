@@ -24,6 +24,11 @@ const HEALTH_INTERVAL_MS = 5_000;
 /* Two consecutive misses before calling a server dead. A dev server that
    rebinds its port on a config change would otherwise flap to failed. */
 const HEALTH_MISSES = 2;
+/* Budget for the adopt-time identity probe. Generous on purpose: the thing it
+   asks is a Next/Vite dev server for its root, and a cold route compile there
+   is tens of seconds, not milliseconds. A tight budget does not fail safe, it
+   fails confusingly. */
+const IDENTITY_TIMEOUT_MS = 45_000;
 /* Vite 5+ on Node 17+ binds only the IPv6 loopback by default, so a probe of
    127.0.0.1 alone reports a running server as absent. Try both. */
 const LOOPBACKS = ["127.0.0.1", "::1"];
@@ -51,6 +56,44 @@ export function portOpen(port, host = "127.0.0.1", timeout = 800) {
 export async function loopbackOpen(port, timeout = 800) {
   for (const host of LOOPBACKS) if (await portOpen(port, host, timeout)) return host;
   return null;
+}
+
+/**
+ * Does the server on this port serve a page containing `marker`?
+ *
+ * The adopt path below used to say an identity check could not be cheap,
+ * because a TCP connect says something answers and not what. That is true of a
+ * TCP connect and not of an HTTP GET. One request to the root, one substring,
+ * a couple of hundred milliseconds.
+ *
+ * Opt-in per project, via `identity` in the config, because a marker is a claim
+ * about a specific app: there is no string that identifies "the right project"
+ * in general. A project without one keeps the old behaviour exactly.
+ *
+ * Why it earns its keep: the config assigns each project a unique upstream
+ * precisely because the projects' own dev scripts collide (three declare 3005,
+ * three 3010, three 3020). The moment a project is pointed at its real port so
+ * lightbox can adopt a running server, "something is listening" stops being
+ * good enough, because the something might be one of the other two.
+ */
+async function servesIdentity(port, host, marker, timeoutMs = IDENTITY_TIMEOUT_MS) {
+  const hostPart = host && host.includes(":") ? `[${host}]` : (host || "127.0.0.1");
+  const ac = new AbortController();
+  const cut = setTimeout(() => ac.abort(), timeoutMs);
+  try {
+    const res = await fetch(`http://${hostPart}:${port}/`, { signal: ac.signal, redirect: "follow" });
+    // A gate that redirects to a login page still identifies the app, so read
+    // the body whatever the status.
+    return (await res.text()).includes(marker) ? "yes" : "no";
+  } catch {
+    // Timed out or refused. NOT the same as serving the wrong thing, and
+    // collapsing the two is how this check first went wrong: the budget was
+    // 3s, a dev server compiling its root took longer, and lightbox reported
+    // ":3020 is held by something that is not AriOS" about AriOS.
+    return "unknown";
+  } finally {
+    clearTimeout(cut);
+  }
 }
 
 /** Resolves to the loopback host the server came up on, or null. */
@@ -304,13 +347,32 @@ export class Supervisor {
     // or a previous run of this tool. Adopt it rather than fighting it.
     const adoptedOn = await loopbackOpen(project.upstream);
     if (adoptedOn) {
+      // A project that declares `identity` refuses to adopt a stranger. It
+      // cannot start its own server either, because the port is taken, so this
+      // is a failure with a name rather than a silent review of the wrong app.
+      const who = project.identity
+        ? await servesIdentity(project.upstream, adoptedOn, project.identity)
+        : "skipped";
+      if (who === "no" || who === "unknown") {
+        e.state = "failed";
+        e.error = who === "no"
+          ? `:${project.upstream} is held by something that is not ${project.name || project.key}`
+            + ` (no "${project.identity}" in what it serves). Stop it, or give this project a free port.`
+          // Refusing on "unknown" is still the safe call, but it has to read as
+          // what it is. Reviewing the wrong app silently is the worse outcome.
+          : `Something holds :${project.upstream} but did not answer in time, so lightbox could not confirm it is`
+            + ` ${project.name || project.key}. Retry once it has finished compiling.`;
+        this.log(project.key, `\n=== refused to adopt :${project.upstream}: identity ${who}\n`);
+        return "failed";
+      }
       e.state = "ready";
       e.error = null;
       e.adopted = true;
-      // There is no identity check here and there cannot be a cheap one: a TCP
-      // connect says something answers, not what. So say so on the row rather
-      // than presenting it as this project's dev server.
-      e.note = `Adopted a server already listening on :${project.upstream}. lightbox did not start it and cannot confirm it is this project.`;
+      e.note = project.identity
+        ? `Adopted the server already listening on :${project.upstream}. It serves "${project.identity}", so it is this project.`
+        // Without a marker a TCP connect says something answers, not what. Say
+        // so on the row rather than presenting it as this project's dev server.
+        : `Adopted a server already listening on :${project.upstream}. lightbox did not start it and cannot confirm it is this project.`;
       e.host = adoptedOn;
       e.upstream = project.upstream;
       e.healthMisses = 0;
