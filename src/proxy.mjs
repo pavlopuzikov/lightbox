@@ -424,24 +424,24 @@ const PAGE_CSS =
   `
 body{margin:0;background:var(--paper);color:var(--ink);
 font:var(--t-lead)/var(--lh-body) var(--sans);-webkit-font-smoothing:antialiased}
-main{max-width:680px;margin:0 auto;padding:76px 32px 72px}
-.eyebrow{margin:0 0 13px;font:var(--t-micro)/var(--lh-solid) var(--mono);text-transform:uppercase;
+main{max-width:680px;margin:0 auto;padding:76px var(--s-8) 72px}
+.eyebrow{margin:0 0 var(--s-5);font:var(--t-micro)/var(--lh-solid) var(--mono);text-transform:uppercase;
 letter-spacing:var(--track-micro);color:var(--ink-3)}
 h1{margin:0;font:400 clamp(34px,6vw,54px)/0.94 var(--display);font-stretch:condensed;
 text-transform:uppercase;letter-spacing:var(--track-display)}
-.rule-heavy{height:var(--rule-heavy);background:var(--ink);margin:14px 0 0}
-.band{height:var(--ornament-height);margin:9px 0 0;opacity:.55;
+.rule-heavy{height:var(--rule-heavy);background:var(--ink);margin:var(--s-5) 0 0}
+.band{height:var(--ornament-height);margin:var(--s-4) 0 0;opacity:.55;
 background-image:var(--ornament);background-repeat:repeat-x;background-position:left center}
-p{margin:22px 0 0;max-width:58ch;font-size:var(--t-lead);color:var(--ink-2)}
-code{padding:1px 5px;background:var(--paper-tint);font:var(--t-body) var(--mono)}
+p{margin:var(--s-7) 0 0;max-width:58ch;font-size:var(--t-lead);color:var(--ink-2)}
+code{padding:var(--s-1) var(--s-2);background:var(--paper-tint);font:var(--t-body) var(--mono)}
 .err{color:var(--vermilion)}
 .err:empty{display:none}
 
 /* A pressed key on paper is an impression, so the buttons carry a hard offset
    with no blur and lose it on the way down rather than dimming. */
-.acts{display:flex;flex-wrap:wrap;gap:12px;margin:28px 0 0}
+.acts{display:flex;flex-wrap:wrap;gap:var(--s-5);margin:var(--s-7) 0 0}
 button,a.btn{appearance:none;display:inline-block;cursor:pointer;text-decoration:none;
-padding:8px 14px;background:var(--paper-2);color:var(--ink);border:2px solid var(--ink);
+padding:var(--s-4) var(--s-5);background:var(--paper-2);color:var(--ink);border:2px solid var(--ink);
 box-shadow:3px 3px 0 var(--ink);font:var(--t-row)/var(--lh-solid) var(--mono);text-transform:uppercase;
 letter-spacing:var(--track-caps);
 transition:transform var(--tap) var(--ease),box-shadow var(--tap) var(--ease)}
@@ -450,21 +450,21 @@ button:active,a.btn:active{transform:translate(3px,3px);box-shadow:0 0 0 var(--i
 button[disabled]{cursor:default;color:var(--ink-3);transform:translate(3px,3px);box-shadow:none}
 
 /* Machine output, in the margin, the way the hub sets it. */
-pre{margin:30px 0 0;padding:11px 0 11px 14px;border-left:var(--rule-mid) solid var(--rule-ink);
+pre{margin:var(--s-8) 0 0;padding:var(--s-5) 0 var(--s-5) var(--s-5);border-left:var(--rule-mid) solid var(--rule-ink);
 overflow:auto;max-height:44vh;white-space:pre-wrap;font:var(--t-row)/var(--lh-open) var(--mono);color:var(--ink-3)}
 
 /* The directory listing is tabular matter, so it is ruled both ways. */
-.cols{display:grid;grid-template-columns:74px 1fr;margin:30px 0 0;padding:0 4px 7px;
+.cols{display:grid;grid-template-columns:74px 1fr;margin:var(--s-8) 0 0;padding:0 var(--s-2) var(--s-3);
 font:var(--t-micro)/var(--lh-snug) var(--mono);text-transform:uppercase;letter-spacing:var(--track-micro);
 color:var(--ink-3);border-bottom:var(--rule-hair) solid var(--rule-ink)}
 .idx{list-style:none;margin:0;padding:0}
 .idx li{border-bottom:var(--rule-hair) solid var(--rule-ink)}
 .idx a{display:grid;grid-template-columns:74px 1fr;align-items:baseline;
-padding:9px 4px;color:var(--ink);text-decoration:none}
+padding:var(--s-4) var(--s-2);color:var(--ink);text-decoration:none}
 .idx a:hover{background:var(--paper-tint)}
-.idx .k{padding-right:12px;font:var(--t-micro)/var(--lh-open) var(--mono);text-transform:uppercase;
+.idx .k{padding-right:var(--s-5);font:var(--t-micro)/var(--lh-open) var(--mono);text-transform:uppercase;
 letter-spacing:var(--track-micro);color:var(--ink-3)}
-.idx .n{padding-left:12px;border-left:var(--rule-hair) solid var(--rule-ink-2);font-size:var(--t-body)}
+.idx .n{padding-left:var(--s-5);border-left:var(--rule-hair) solid var(--rule-ink-2);font-size:var(--t-body)}
 .idx .n b{font-weight:400}
 
 a:focus-visible,button:focus-visible{outline:var(--rule-mid) solid var(--vermilion);

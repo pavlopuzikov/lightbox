@@ -141,6 +141,26 @@ which is how it survived an audit those files otherwise pass cleanly.
   steps. The first guard alone would not have stopped this: adding `--t-6`
   through `--t-11` is the same drift with a token in front of it.
 
+### Spacing was on no scale either
+
+The same defect as the type, on the axis underneath it. Padding, margin and gap
+across the three chrome files carried around thirty-five distinct values between
+1px and 84px.
+
+- `design.css` defines `--s-1` (2px) through `--s-9` (44px): four-based, with a
+  2 and a 6 in it, because at this size a 6px gap and an 8px gap are different
+  decisions and forcing one into the other would be a redesign rather than a
+  rhythm. Ties round down, since the failure mode of a spacing pass is
+  everything quietly drifting airier.
+- Anything above `--s-9` stays a literal. The page gutter, the space between
+  sections and the masthead padding are set to the sheet, the same exemption the
+  clamp()ed display sizes get.
+- Measured before and after at 1280, 768 and 390: no horizontal overflow at any
+  width, the same 45 rows, and the page height moved 0.9%, 0.3% and -2.6%. The
+  largest single change was two 40px values going to 44.
+- `test/design.test.mjs` fails on a raw px padding, margin or gap of 44 or less
+  in any surface, and on the scale growing past nine steps.
+
 ### Nothing that was not measured reports as zero any more
 
 This was the organising defect, and it was measurable in the audit data on

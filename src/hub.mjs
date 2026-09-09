@@ -44,7 +44,7 @@ a{color:var(--ink);text-decoration:underline;text-decoration-thickness:1px;
 text-underline-offset:3px;text-decoration-color:var(--rule-ink)}
 a:hover{color:var(--vermilion);text-decoration-color:var(--vermilion)}
 :focus-visible{outline:2px solid var(--vermilion);outline-offset:2px}
-.wrap{max-width:1180px;margin:0 auto;padding:0 44px 0}
+.wrap{max-width:1180px;margin:0 auto;padding:0 var(--s-9) 0}
 
 /* ---------------------------------------------------------------- *
  * Masthead
@@ -54,14 +54,14 @@ a:hover{color:var(--vermilion);text-decoration-color:var(--vermilion)}
  * is deliberate: of everything the hub knows, how much of the work is done is
  * the number you came to read.
  * ---------------------------------------------------------------- */
-header{display:grid;grid-template-columns:1fr auto;align-items:end;gap:16px 40px;padding:46px 0 12px}
+header{display:grid;grid-template-columns:1fr auto;align-items:end;gap:var(--s-6) var(--s-9);padding:46px 0 var(--s-5)}
 h1{margin:0;font:400 clamp(46px,7.5vw,78px)/.82 var(--display);font-stretch:condensed;
 text-transform:uppercase;letter-spacing:var(--track-display);color:var(--ink)}
-.tagline{margin:10px 0 0;font:var(--t-body)/var(--lh-snug) var(--sans);color:var(--ink-3);max-width:44ch}
+.tagline{margin:var(--s-4) 0 0;font:var(--t-body)/var(--lh-snug) var(--sans);color:var(--ink-3);max-width:44ch}
 .tally{text-align:right;line-height:.78}
 .tally-n{display:block;font:400 clamp(48px,8vw,84px)/.78 var(--slab);font-weight:700;
 color:var(--vermilion);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
-.tally-l{display:block;margin-top:9px;font:var(--t-micro)/var(--lh-solid) var(--mono);text-transform:uppercase;
+.tally-l{display:block;margin-top:var(--s-4);font:var(--t-micro)/var(--lh-solid) var(--mono);text-transform:uppercase;
 letter-spacing:var(--track-micro);color:var(--ink-3)}
 
 .rule-heavy{height:var(--rule-heavy);background:var(--ink)}
@@ -69,7 +69,7 @@ letter-spacing:var(--track-micro);color:var(--ink-3)}
 /* The colophon: everything the hub knows about itself, set the size a
    broadside sets its imprint. Diamonds separate the facts, so the line reads
    as one typeset run rather than a row of chips. */
-.colophon{display:flex;align-items:center;flex-wrap:wrap;gap:0 14px;margin:0;padding:11px 0 0;
+.colophon{display:flex;align-items:center;flex-wrap:wrap;gap:0 var(--s-5);margin:0;padding:var(--s-5) 0 0;
 font:var(--t-micro)/var(--lh-open) var(--mono);text-transform:uppercase;letter-spacing:var(--track-caps);color:var(--ink-3)}
 .colophon b{font-weight:400;color:var(--ink);font-variant-numeric:tabular-nums}
 .colophon .off{color:var(--vermilion)}
@@ -79,19 +79,19 @@ font:var(--t-micro)/var(--lh-open) var(--mono);text-transform:uppercase;letter-s
 
 /* The engraved band. One SVG, repeated, and the only ornament in the system:
    it closes the masthead and opens the list, and appears nowhere else. */
-.band{height:var(--ornament-height);margin:16px 0 0;
+.band{height:var(--ornament-height);margin:var(--s-6) 0 0;
 background:var(--ornament) repeat-x left center}
 
 /* ---------------------------------------------------------------- *
  * Sections
  * ---------------------------------------------------------------- */
-section{margin-top:44px}
-.head{display:flex;align-items:baseline;gap:12px;border-bottom:var(--rule-mid) solid var(--ink);padding-bottom:6px}
+section{margin-top:var(--s-9)}
+.head{display:flex;align-items:baseline;gap:var(--s-5);border-bottom:var(--rule-mid) solid var(--ink);padding-bottom:var(--s-3)}
 section h2{margin:0;font:400 var(--t-head)/var(--lh-solid) var(--display);font-stretch:condensed;text-transform:uppercase;
 letter-spacing:var(--track-caps);color:var(--ink)}
 .count{font:var(--t-row)/var(--lh-solid) var(--mono);color:var(--vermilion);letter-spacing:var(--track-caps);
 text-transform:uppercase;font-variant-numeric:tabular-nums}
-section .blurb{margin:9px 0 2px;color:var(--ink-3);font-size:var(--t-body);line-height:var(--lh-body);max-width:66ch}
+section .blurb{margin:var(--s-4) 0 var(--s-1);color:var(--ink-3);font-size:var(--t-body);line-height:var(--lh-body);max-width:66ch}
 
 /* ---------------------------------------------------------------- *
  * The list
@@ -100,7 +100,7 @@ section .blurb{margin:9px 0 2px;color:var(--ink-3);font-size:var(--t-body);line-
  * is one hairline apart from the next and nothing is boxed, padded or
  * shadowed. Density is the feature.
  * ---------------------------------------------------------------- */
-.list{margin-top:14px}
+.list{margin-top:var(--s-5)}
 
 /* Tabular matter in a broadside is ruled both ways: heavy horizontals separate
    the entries, light verticals separate the fields. Without the verticals a row
@@ -109,17 +109,17 @@ section .blurb{margin:9px 0 2px;color:var(--ink-3);font-size:var(--t-body);line-
    deliberately unequal, so the eye still reads the list as rows first. */
 .cols,.row{display:grid;
 grid-template-columns:16px minmax(150px,1fr) minmax(0,1.8fr) 104px 158px 224px;gap:0}
-.cols>*,.row>.c-name,.row>.c-note,.row>.num,.row>.acts{padding-right:16px}
+.cols>*,.row>.c-name,.row>.c-note,.row>.num,.row>.acts{padding-right:var(--s-6)}
 .cols>.r,.row>.c-note,.row>.num,.row>.acts{
-border-left:var(--rule-hair) solid var(--rule-ink-2);padding-left:16px}
+border-left:var(--rule-hair) solid var(--rule-ink-2);padding-left:var(--s-6)}
 
 /* The ledger head, once per section. It is the cheapest possible way to say
    what the columns are: four words, set at the size a printed table sets its
    headings, and never repeated between rows. */
-.cols{padding:0 4px 7px;font:var(--t-micro)/var(--lh-snug) var(--mono);text-transform:uppercase;
+.cols{padding:0 var(--s-2) var(--s-3);font:var(--t-micro)/var(--lh-snug) var(--mono);text-transform:uppercase;
 letter-spacing:var(--track-micro);color:var(--ink-3);border-bottom:var(--rule-hair) solid var(--rule-ink)}
 
-.row{align-items:stretch;padding:12px 4px 11px;
+.row{align-items:stretch;padding:var(--s-5) var(--s-2) var(--s-5);
 border-bottom:var(--rule-hair) solid var(--rule-ink);position:relative}
 .row:hover{background:var(--paper-tint)}
 .row.missing .name,.row.missing .note{color:var(--ink-3)}
@@ -128,7 +128,7 @@ border-bottom:var(--rule-hair) solid var(--rule-ink);position:relative}
    stopped, half is working, solid is up, and red is the only failure. Adding
    a third ink for "healthy" would have spent the loudest thing in the system
    on the most ordinary state on the page. */
-.mark{width:9px;height:9px;margin-top:6px;border:1.5px solid var(--ink-3);background:transparent}
+.mark{width:9px;height:9px;margin-top:var(--s-3);border:1.5px solid var(--ink-3);background:transparent}
 .mark.static{visibility:hidden}
 .mark.ready{background:var(--ink);border-color:var(--ink)}
 .mark.starting,.mark.installing{border-color:var(--ink);
@@ -137,22 +137,22 @@ background:linear-gradient(var(--ink),var(--ink)) 0 0/100% 50% no-repeat}
 
 /* The name column is the only one that carries two registers, a title and a
    label, so it gets the extra breathing room the rules took away. */
-.c-name{padding-top:1px}
+.c-name{padding-top:var(--s-1)}
 .name{margin:0;font:400 var(--t-lead)/var(--lh-tight) var(--display);font-stretch:condensed;text-transform:uppercase;
 letter-spacing:.05em;color:var(--ink)}
-.sys{margin-top:5px;font:var(--t-micro)/var(--lh-snug) var(--mono);text-transform:uppercase;
+.sys{margin-top:var(--s-2);font:var(--t-micro)/var(--lh-snug) var(--mono);text-transform:uppercase;
 letter-spacing:var(--track-caps);color:var(--ink-3)}
-.note{margin:1px 0 0;color:var(--ink-2);font-size:var(--t-body);line-height:var(--lh-body)}
+.note{margin:var(--s-1) 0 0;color:var(--ink-2);font-size:var(--t-body);line-height:var(--lh-body)}
 /* Machine output, marked as such. The note above it is something you wrote;
    this line is what the audit found, and a rule in the margin is how a proof
    distinguishes the two without spending a colour on it. */
-.hand{margin:6px 0 0;padding-left:9px;border-left:2px solid var(--rule-ink);
+.hand{margin:var(--s-3) 0 0;padding-left:var(--s-4);border-left:2px solid var(--rule-ink);
 font:var(--t-micro)/var(--lh-open) var(--mono);color:var(--ink-3)}.hand:empty{display:none}
-.err{margin:6px 0 0;color:var(--vermilion);font-size:var(--t-body);line-height:var(--lh-body);white-space:pre-wrap}
+.err{margin:var(--s-3) 0 0;color:var(--vermilion);font-size:var(--t-body);line-height:var(--lh-body);white-space:pre-wrap}
 .err:empty{display:none}
-.adopted{margin:6px 0 0;color:var(--ink-3);font-size:var(--t-body);line-height:var(--lh-body)}
+.adopted{margin:var(--s-3) 0 0;color:var(--ink-3);font-size:var(--t-body);line-height:var(--lh-body)}
 .adopted:empty{display:none}
-.num{margin-top:2px;font:var(--t-row)/var(--lh-open) var(--mono);color:var(--ink-3);font-variant-numeric:tabular-nums}
+.num{margin-top:var(--s-1);font:var(--t-row)/var(--lh-open) var(--mono);color:var(--ink-3);font-variant-numeric:tabular-nums}
 .num b{font-weight:600;color:var(--ink)}
 .num .m{color:var(--ink-3)}
 
@@ -160,7 +160,7 @@ font:var(--t-micro)/var(--lh-open) var(--mono);color:var(--ink-3)}.hand:empty{di
 /* One run of small capitals, wrapping, the way the bottom line of a broadside
    sets its imprint. Stacked vertically these cost about 100px of row height
    each, and forty of those is the difference between two screens and five. */
-.acts{display:flex;flex-wrap:wrap;align-items:baseline;gap:5px 11px;margin-top:1px}
+.acts{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--s-2) var(--s-5);margin-top:var(--s-1)}
 button.text{appearance:none;border:0;background:none;padding:0;cursor:pointer;
 font:var(--t-micro)/var(--lh-body) var(--mono);text-transform:uppercase;letter-spacing:var(--track-caps);color:var(--ink-2)}
 button.text:hover{color:var(--vermilion)}
@@ -180,30 +180,30 @@ text-decoration-thickness:1.5px;text-underline-offset:3px}
    row it underlined the project name instead, which reads as a stray rule; and
    run the full width, a finished project drew a 2px black line the width of
    the sheet and cut the list in half in the wrong place. */
-.prog{display:block;margin-top:7px;height:var(--rule-mid);background:var(--rule-ink);
+.prog{display:block;margin-top:var(--s-3);height:var(--rule-mid);background:var(--rule-ink);
 overflow:hidden}
 .prog i{display:block;height:100%;max-width:100%;background:var(--ink)}
 
-.more{grid-column:2 / -1;display:none;padding:12px 0 4px}
+.more{grid-column:2 / -1;display:none;padding:var(--s-5) 0 var(--s-2)}
 .row.open-pages .more.pages,.row.open-log .more.log{display:block}
-.routes{margin:0;padding:0;list-style:none;columns:2;column-gap:36px;font:var(--t-row)/var(--lh-open) var(--mono)}
-.routes li{break-inside:avoid;display:flex;gap:10px;align-items:center}
+.routes{margin:0;padding:0;list-style:none;columns:2;column-gap:var(--s-8);font:var(--t-row)/var(--lh-open) var(--mono)}
+.routes li{break-inside:avoid;display:flex;gap:var(--s-4);align-items:center}
 .routes .d{width:6px;height:6px;border:1px solid var(--ink-3);flex:none}
 .routes .d.on{background:var(--ink);border-color:var(--ink)}
 .routes a{color:var(--ink-2);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .routes a:hover{color:var(--vermilion)}
 .routes .dyn{color:var(--ink-3);font-size:var(--t-micro);margin-left:auto;flex:none;
 text-transform:uppercase;letter-spacing:var(--track-caps)}
-.routes .fam{margin-top:9px;color:var(--ink-3);font:var(--t-micro)/var(--lh-open) var(--mono);
+.routes .fam{margin-top:var(--s-4);color:var(--ink-3);font:var(--t-micro)/var(--lh-open) var(--mono);
 text-transform:uppercase;letter-spacing:var(--track-caps);break-after:avoid}
-pre{margin:0;padding:11px 13px;background:var(--paper-2);border:var(--rule-hair) solid var(--rule-ink);
+pre{margin:0;padding:var(--s-5) var(--s-5);background:var(--paper-2);border:var(--rule-hair) solid var(--rule-ink);
 font:var(--t-row)/var(--lh-body) var(--mono);color:var(--ink-2);max-height:260px;overflow:auto;white-space:pre-wrap}
 
 /* Status ---------------------------------------------------------
  * A diamond, filled the way the row marks are filled. This used to reach for
  * --line, --dim and --fg, none of which this stylesheet has ever defined, so
  * the dot painted transparent and the select had no border at all. */
-.status{display:inline-flex;align-items:center;gap:6px}
+.status{display:inline-flex;align-items:center;gap:var(--s-3)}
 .status::before{content:"";width:6px;height:6px;background:var(--ink-3);transform:rotate(45deg);flex:none}
 .status.s-unset::before{background:none;border:1px solid var(--rule-ink)}
 .status.s-active::before{background:var(--ink)}
@@ -212,27 +212,27 @@ font:var(--t-row)/var(--lh-body) var(--mono);color:var(--ink-2);max-height:260px
 .status.s-retired::before{background:var(--vermilion)}
 .status select{appearance:none;background:none;border:0;border-bottom:1px solid var(--rule-ink);
 color:var(--ink-3);font:var(--t-micro)/var(--lh-body) var(--mono);text-transform:uppercase;
-letter-spacing:var(--track-caps);padding:0 2px 1px;cursor:pointer}
+letter-spacing:var(--track-caps);padding:0 var(--s-1) var(--s-1);cursor:pointer}
 .status select:hover,.status select:focus-visible{color:var(--ink);border-bottom-color:var(--ink)}
 
 /* Colophon foot: the imprint line at the bottom of the sheet. */
-.foot{margin:56px 0 0;border-top:var(--rule-heavy) solid var(--ink);padding:12px 0 40px;
-display:flex;align-items:center;flex-wrap:wrap;gap:0 14px;
+.foot{margin:56px 0 0;border-top:var(--rule-heavy) solid var(--ink);padding:var(--s-5) 0 var(--s-9);
+display:flex;align-items:center;flex-wrap:wrap;gap:0 var(--s-5);
 font:var(--t-micro)/var(--lh-open) var(--mono);text-transform:uppercase;letter-spacing:var(--track-micro);color:var(--ink-3)}
 
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
 @media (max-width:900px){
-.wrap{padding:0 20px}
+.wrap{padding:0 var(--s-6)}
 header{grid-template-columns:1fr;align-items:start}
 .tally{text-align:left}
 /* Three columns carrying six fields: the vertical rules would no longer line
    up with anything, so they go, and the head goes with them. */
 .cols{display:none}
-.row{grid-template-columns:16px 1fr 1fr;gap:6px 14px;align-items:start}
+.row{grid-template-columns:16px 1fr 1fr;gap:var(--s-3) var(--s-5);align-items:start}
 .row>.c-note,.row>.num,.row>.acts{border-left:0;padding-left:0}
 .row .note{grid-column:2 / -1}.row .num{grid-column:2}
-.row .acts{grid-column:3;flex-direction:row;flex-wrap:wrap;gap:6px 14px}
+.row .acts{grid-column:3;flex-direction:row;flex-wrap:wrap;gap:var(--s-3) var(--s-5)}
 .routes{columns:1}}
 
 /* Ink meets paper or it does not. Colour only, never movement. */
@@ -479,13 +479,13 @@ function waitPage(p, hubUrl) {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Starting ${esc(p.name)}</title><link rel="icon" href="${esc(hubUrl)}favicon.svg" type="image/svg+xml">
 <style>${CSS}
-main.wait{max-width:660px;margin:0 auto;padding:84px 44px}
-.wait h1{font-size:clamp(38px,6vw,58px);margin:0 0 6px}
-.wait .rule-heavy{margin:14px 0 0}
-.wait .note{font-size:var(--t-lead);max-width:52ch;margin:16px 0 0}
-.wait .prog{height:var(--ornament-height);background:var(--paper-tint);margin:22px 0 16px}
+main.wait{max-width:660px;margin:0 auto;padding:84px var(--s-9)}
+.wait h1{font-size:clamp(38px,6vw,58px);margin:0 0 var(--s-3)}
+.wait .rule-heavy{margin:var(--s-5) 0 0}
+.wait .note{font-size:var(--t-lead);max-width:52ch;margin:var(--s-6) 0 0}
+.wait .prog{height:var(--ornament-height);background:var(--paper-tint);margin:var(--s-7) 0 var(--s-6)}
 .wait .prog i{background:var(--vermilion)}
-.wait .acts{flex-direction:row;gap:24px;margin:0 0 24px}
+.wait .acts{flex-direction:row;gap:var(--s-7);margin:0 0 var(--s-7)}
 </style></head><body><main class="wait">
 <h1>${esc(p.name)}</h1>
 <div class="rule-heavy"></div>

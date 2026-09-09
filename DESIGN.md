@@ -118,6 +118,32 @@ capitals are set wide, and the smaller they get the wider they go.
 | `--track-caps` | `0.09em` | Section heads, labels, buttons. |
 | `--track-micro` | `0.16em` | The colophon lines, top and bottom. |
 
+## Spacing
+
+Four-based, with a 2 and a 6 in it. At this size a 6px gap and an 8px gap are
+different decisions, and a scale that forced one into the other would be a
+redesign rather than a rhythm. Before this existed, padding, margin and gap
+across the three chrome files carried around thirty-five distinct values between
+1px and 84px, for the same reason the type did: each was chosen where it was
+written.
+
+| Token | Value | | Token | Value |
+| --- | --- | --- | --- | --- |
+| `--s-1` | `2px` | | `--s-6` | `16px` |
+| `--s-2` | `4px` | | `--s-7` | `24px` |
+| `--s-3` | `6px` | | `--s-8` | `32px` |
+| `--s-4` | `8px` | | `--s-9` | `44px` |
+| `--s-5` | `12px` | | | |
+
+Anything larger than `--s-9` stays a literal on purpose. The page gutter, the
+space between sections and the masthead padding are set to the sheet, the way
+the display sizes are, and putting them on a nine-step scale would only mean
+inventing steps nothing else uses.
+
+The scale covers padding, margin and gap. A `top`, a `width` or a `border` is a
+position or a size rather than spacing, and snapping those to a rhythm would
+move things that are aligned to something else.
+
 ## Rules
 
 Three weights, and hierarchy is carried by weight alone. A fourth would mean the

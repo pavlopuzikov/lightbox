@@ -75,6 +75,39 @@ test("the type ladder is small enough to be a ladder", () => {
   assert.equal(TOKENS["--t-head"], "21px");
 });
 
+test("no surface hardcodes a spacing value", () => {
+  // Third axis, same failure as the two above: padding, margin and gap carried
+  // around thirty-five distinct values between 1px and 84px across these files.
+  //
+  // The exemption is the mirror of the type one. Anything larger than --s-9 is
+  // set to the sheet, not to the scale: the page gutter, the space between
+  // sections, the masthead padding. Putting those on a nine-step scale would
+  // only mean inventing steps nothing else uses.
+  const TOP = 44;
+  for (const f of SURFACES) {
+    const decls = read(f).matchAll(
+      /(?:padding|margin|gap|column-gap|row-gap)(?:-(?:top|right|bottom|left|inline|block))?:([^;"}']*)/g
+    );
+    const raw = [];
+    for (const d of decls) {
+      for (const m of d[1].matchAll(/\b(\d+)px/g)) {
+        if (Number(m[1]) <= TOP) raw.push(m[0]);
+      }
+    }
+    assert.deepEqual(raw, [], `${f} sets spacing off the scale: ${raw.join(", ")}`);
+  }
+});
+
+test("the spacing scale is nine steps and stays nine", () => {
+  // Same reasoning as the type ladder's count: a guard on raw px cannot stop
+  // --s-10 through --s-20 being added, which is the same drift with a token in
+  // front of it.
+  const steps = Object.keys(TOKENS).filter((k) => /^--s-\d+$/.test(k));
+  assert.equal(steps.length, 9, `the spacing scale has grown: ${steps.join(", ")}`);
+  assert.equal(TOKENS["--s-1"], "2px");
+  assert.equal(TOKENS["--s-9"], "44px");
+});
+
 test("every token the chrome references is defined in design.css", () => {
   const referenced = new Set();
   for (const f of SURFACES) {
