@@ -33,7 +33,7 @@ const esc = (s) =>
 const CSS = rootCss() + `
 *{box-sizing:border-box}
 html{background:var(--paper)}
-body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.55 var(--sans);
+body{margin:0;background:var(--paper);color:var(--ink);font:var(--t-lead)/var(--lh-body) var(--sans);
 -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
 
 /* The one full-bleed element on the sheet: a red bar across the head of the
@@ -57,11 +57,11 @@ a:hover{color:var(--vermilion);text-decoration-color:var(--vermilion)}
 header{display:grid;grid-template-columns:1fr auto;align-items:end;gap:16px 40px;padding:46px 0 12px}
 h1{margin:0;font:400 clamp(46px,7.5vw,78px)/.82 var(--display);font-stretch:condensed;
 text-transform:uppercase;letter-spacing:var(--track-display);color:var(--ink)}
-.tagline{margin:10px 0 0;font:12px/1.3 var(--sans);color:var(--ink-3);max-width:44ch}
+.tagline{margin:10px 0 0;font:var(--t-body)/var(--lh-snug) var(--sans);color:var(--ink-3);max-width:44ch}
 .tally{text-align:right;line-height:.78}
 .tally-n{display:block;font:400 clamp(48px,8vw,84px)/.78 var(--slab);font-weight:700;
 color:var(--vermilion);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
-.tally-l{display:block;margin-top:9px;font:10px/1 var(--mono);text-transform:uppercase;
+.tally-l{display:block;margin-top:9px;font:var(--t-micro)/var(--lh-solid) var(--mono);text-transform:uppercase;
 letter-spacing:var(--track-micro);color:var(--ink-3)}
 
 .rule-heavy{height:var(--rule-heavy);background:var(--ink)}
@@ -70,7 +70,7 @@ letter-spacing:var(--track-micro);color:var(--ink-3)}
    broadside sets its imprint. Diamonds separate the facts, so the line reads
    as one typeset run rather than a row of chips. */
 .colophon{display:flex;align-items:center;flex-wrap:wrap;gap:0 14px;margin:0;padding:11px 0 0;
-font:10.5px/1.9 var(--mono);text-transform:uppercase;letter-spacing:var(--track-caps);color:var(--ink-3)}
+font:var(--t-micro)/var(--lh-open) var(--mono);text-transform:uppercase;letter-spacing:var(--track-caps);color:var(--ink-3)}
 .colophon b{font-weight:400;color:var(--ink);font-variant-numeric:tabular-nums}
 .colophon .off{color:var(--vermilion)}
 .colophon .spacer{flex:1 0 24px}
@@ -87,11 +87,11 @@ background:var(--ornament) repeat-x left center}
  * ---------------------------------------------------------------- */
 section{margin-top:44px}
 .head{display:flex;align-items:baseline;gap:12px;border-bottom:var(--rule-mid) solid var(--ink);padding-bottom:6px}
-section h2{margin:0;font:400 21px/1 var(--display);font-stretch:condensed;text-transform:uppercase;
+section h2{margin:0;font:400 var(--t-head)/var(--lh-solid) var(--display);font-stretch:condensed;text-transform:uppercase;
 letter-spacing:var(--track-caps);color:var(--ink)}
-.count{font:11.5px/1 var(--mono);color:var(--vermilion);letter-spacing:var(--track-caps);
+.count{font:var(--t-row)/var(--lh-solid) var(--mono);color:var(--vermilion);letter-spacing:var(--track-caps);
 text-transform:uppercase;font-variant-numeric:tabular-nums}
-section .blurb{margin:9px 0 2px;color:var(--ink-3);font-size:12.5px;line-height:1.6;max-width:66ch}
+section .blurb{margin:9px 0 2px;color:var(--ink-3);font-size:var(--t-body);line-height:var(--lh-body);max-width:66ch}
 
 /* ---------------------------------------------------------------- *
  * The list
@@ -116,7 +116,7 @@ border-left:var(--rule-hair) solid var(--rule-ink-2);padding-left:16px}
 /* The ledger head, once per section. It is the cheapest possible way to say
    what the columns are: four words, set at the size a printed table sets its
    headings, and never repeated between rows. */
-.cols{padding:0 4px 7px;font:9.5px/1.4 var(--mono);text-transform:uppercase;
+.cols{padding:0 4px 7px;font:var(--t-micro)/var(--lh-snug) var(--mono);text-transform:uppercase;
 letter-spacing:var(--track-micro);color:var(--ink-3);border-bottom:var(--rule-hair) solid var(--rule-ink)}
 
 .row{align-items:stretch;padding:12px 4px 11px;
@@ -138,21 +138,21 @@ background:linear-gradient(var(--ink),var(--ink)) 0 0/100% 50% no-repeat}
 /* The name column is the only one that carries two registers, a title and a
    label, so it gets the extra breathing room the rules took away. */
 .c-name{padding-top:1px}
-.name{margin:0;font:400 14px/1.2 var(--display);font-stretch:condensed;text-transform:uppercase;
+.name{margin:0;font:400 var(--t-lead)/var(--lh-tight) var(--display);font-stretch:condensed;text-transform:uppercase;
 letter-spacing:.05em;color:var(--ink)}
-.sys{margin-top:5px;font:10px/1.4 var(--mono);text-transform:uppercase;
+.sys{margin-top:5px;font:var(--t-micro)/var(--lh-snug) var(--mono);text-transform:uppercase;
 letter-spacing:var(--track-caps);color:var(--ink-3)}
-.note{margin:1px 0 0;color:var(--ink-2);font-size:12.5px;line-height:1.55}
+.note{margin:1px 0 0;color:var(--ink-2);font-size:var(--t-body);line-height:var(--lh-body)}
 /* Machine output, marked as such. The note above it is something you wrote;
    this line is what the audit found, and a rule in the margin is how a proof
    distinguishes the two without spending a colour on it. */
 .hand{margin:6px 0 0;padding-left:9px;border-left:2px solid var(--rule-ink);
-font:10.5px/1.7 var(--mono);color:var(--ink-3)}.hand:empty{display:none}
-.err{margin:6px 0 0;color:var(--vermilion);font-size:12px;line-height:1.5;white-space:pre-wrap}
+font:var(--t-micro)/var(--lh-open) var(--mono);color:var(--ink-3)}.hand:empty{display:none}
+.err{margin:6px 0 0;color:var(--vermilion);font-size:var(--t-body);line-height:var(--lh-body);white-space:pre-wrap}
 .err:empty{display:none}
-.adopted{margin:6px 0 0;color:var(--ink-3);font-size:12px;line-height:1.5}
+.adopted{margin:6px 0 0;color:var(--ink-3);font-size:var(--t-body);line-height:var(--lh-body)}
 .adopted:empty{display:none}
-.num{margin-top:2px;font:11.5px/1.7 var(--mono);color:var(--ink-3);font-variant-numeric:tabular-nums}
+.num{margin-top:2px;font:var(--t-row)/var(--lh-open) var(--mono);color:var(--ink-3);font-variant-numeric:tabular-nums}
 .num b{font-weight:600;color:var(--ink)}
 .num .m{color:var(--ink-3)}
 
@@ -162,12 +162,12 @@ font:10.5px/1.7 var(--mono);color:var(--ink-3)}.hand:empty{display:none}
    each, and forty of those is the difference between two screens and five. */
 .acts{display:flex;flex-wrap:wrap;align-items:baseline;gap:5px 11px;margin-top:1px}
 button.text{appearance:none;border:0;background:none;padding:0;cursor:pointer;
-font:10.5px/1.5 var(--mono);text-transform:uppercase;letter-spacing:var(--track-caps);color:var(--ink-2)}
+font:var(--t-micro)/var(--lh-body) var(--mono);text-transform:uppercase;letter-spacing:var(--track-caps);color:var(--ink-2)}
 button.text:hover{color:var(--vermilion)}
 button.text:disabled{color:var(--ink-3);cursor:default}
 button.text.quiet{color:var(--ink-3)}
 button.text.quiet:hover{color:var(--ink)}
-.acts .open{flex:0 0 100%;font:400 12.5px/1.3 var(--display);font-stretch:condensed;
+.acts .open{flex:0 0 100%;font:400 var(--t-body)/var(--lh-snug) var(--display);font-stretch:condensed;
 text-transform:uppercase;letter-spacing:.08em;color:var(--vermilion);text-decoration:none}
 .acts .open:hover{color:var(--vermilion-2);text-decoration:underline;
 text-decoration-thickness:1.5px;text-underline-offset:3px}
@@ -186,18 +186,18 @@ overflow:hidden}
 
 .more{grid-column:2 / -1;display:none;padding:12px 0 4px}
 .row.open-pages .more.pages,.row.open-log .more.log{display:block}
-.routes{margin:0;padding:0;list-style:none;columns:2;column-gap:36px;font:11.5px/2 var(--mono)}
+.routes{margin:0;padding:0;list-style:none;columns:2;column-gap:36px;font:var(--t-row)/var(--lh-open) var(--mono)}
 .routes li{break-inside:avoid;display:flex;gap:10px;align-items:center}
 .routes .d{width:6px;height:6px;border:1px solid var(--ink-3);flex:none}
 .routes .d.on{background:var(--ink);border-color:var(--ink)}
 .routes a{color:var(--ink-2);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .routes a:hover{color:var(--vermilion)}
-.routes .dyn{color:var(--ink-3);font-size:10px;margin-left:auto;flex:none;
+.routes .dyn{color:var(--ink-3);font-size:var(--t-micro);margin-left:auto;flex:none;
 text-transform:uppercase;letter-spacing:var(--track-caps)}
-.routes .fam{margin-top:9px;color:var(--ink-3);font:10px/1.9 var(--mono);
+.routes .fam{margin-top:9px;color:var(--ink-3);font:var(--t-micro)/var(--lh-open) var(--mono);
 text-transform:uppercase;letter-spacing:var(--track-caps);break-after:avoid}
 pre{margin:0;padding:11px 13px;background:var(--paper-2);border:var(--rule-hair) solid var(--rule-ink);
-font:11px/1.55 var(--mono);color:var(--ink-2);max-height:260px;overflow:auto;white-space:pre-wrap}
+font:var(--t-row)/var(--lh-body) var(--mono);color:var(--ink-2);max-height:260px;overflow:auto;white-space:pre-wrap}
 
 /* Status ---------------------------------------------------------
  * A diamond, filled the way the row marks are filled. This used to reach for
@@ -211,14 +211,14 @@ font:11px/1.55 var(--mono);color:var(--ink-2);max-height:260px;overflow:auto;whi
 .status.s-archived::before{background:none;border:1px solid var(--ink-3)}
 .status.s-retired::before{background:var(--vermilion)}
 .status select{appearance:none;background:none;border:0;border-bottom:1px solid var(--rule-ink);
-color:var(--ink-3);font:10.5px/1.5 var(--mono);text-transform:uppercase;
+color:var(--ink-3);font:var(--t-micro)/var(--lh-body) var(--mono);text-transform:uppercase;
 letter-spacing:var(--track-caps);padding:0 2px 1px;cursor:pointer}
 .status select:hover,.status select:focus-visible{color:var(--ink);border-bottom-color:var(--ink)}
 
 /* Colophon foot: the imprint line at the bottom of the sheet. */
 .foot{margin:56px 0 0;border-top:var(--rule-heavy) solid var(--ink);padding:12px 0 40px;
 display:flex;align-items:center;flex-wrap:wrap;gap:0 14px;
-font:10px/1.9 var(--mono);text-transform:uppercase;letter-spacing:var(--track-micro);color:var(--ink-3)}
+font:var(--t-micro)/var(--lh-open) var(--mono);text-transform:uppercase;letter-spacing:var(--track-micro);color:var(--ink-3)}
 
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
@@ -482,7 +482,7 @@ function waitPage(p, hubUrl) {
 main.wait{max-width:660px;margin:0 auto;padding:84px 44px}
 .wait h1{font-size:clamp(38px,6vw,58px);margin:0 0 6px}
 .wait .rule-heavy{margin:14px 0 0}
-.wait .note{font-size:13.5px;max-width:52ch;margin:16px 0 0}
+.wait .note{font-size:var(--t-lead);max-width:52ch;margin:16px 0 0}
 .wait .prog{height:var(--ornament-height);background:var(--paper-tint);margin:22px 0 16px}
 .wait .prog i{background:var(--vermilion)}
 .wait .acts{flex-direction:row;gap:24px;margin:0 0 24px}

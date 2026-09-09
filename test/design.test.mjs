@@ -35,6 +35,46 @@ test("no surface hardcodes a colour", () => {
   }
 });
 
+test("no surface hardcodes a type size or a leading", () => {
+  // The same failure as the colour one above, found later and in a form that is
+  // harder to see: twelve font sizes between 9.5px and 21px across these three
+  // files, eight of them within half a pixel of another, because each was
+  // chosen where it was written. Nothing was wrong on any single line, which is
+  // why it survived a colour audit that these files pass cleanly.
+  //
+  // Two exemptions, both deliberate and both narrow:
+  //   - clamp(), for the display sizes. Wood type is sized to the sheet, not to
+  //     a ladder, so h1 and the tally scale with the viewport.
+  //   - a leading BELOW 1. The ladder starts at 1 because nothing in the body of
+  //     the sheet sets tighter than solid; a 78-pixel headline does, and .78 or
+  //     .82 is chosen for that headline rather than shared with anything.
+  for (const f of SURFACES) {
+    const css = read(f);
+    const sizes = [...css.matchAll(/font:(?:\d00 )?(\d+(?:\.\d+)?px)|font-size:\s*(\d+(?:\.\d+)?px)/g)]
+      .map((m) => m[1] || m[2]);
+    assert.deepEqual(sizes, [], `${f} sets a type size outside the ladder: ${sizes.join(", ")}`);
+
+    // Anchored to `font:` rather than to a bare "/n", because proxy.mjs also
+    // writes "HTTP/1.1" and a broad pattern reads that as a leading of 1.1.
+    const leads = [...css.matchAll(/line-height:\s*(\d*\.?\d+)|font:[^;"']*?\/(\d*\.?\d+)/g)]
+      .map((m) => m[1] || m[2])
+      .filter((v) => Number(v) >= 1);
+    assert.deepEqual(leads, [], `${f} sets a leading outside the ladder: ${leads.join(", ")}`);
+  }
+});
+
+test("the type ladder is small enough to be a ladder", () => {
+  // Five steps and five leadings. The guard above stops a raw px appearing; it
+  // cannot stop --t-6 through --t-11 being added, which is the same drift with
+  // a token in front of it. The count is the actual constraint.
+  const sizes = Object.keys(TOKENS).filter((k) => k.startsWith("--t-"));
+  const leads = Object.keys(TOKENS).filter((k) => k.startsWith("--lh-"));
+  assert.equal(sizes.length, 5, `the ladder has grown: ${sizes.join(", ")}`);
+  assert.equal(leads.length, 5, `the leadings have grown: ${leads.join(", ")}`);
+  assert.equal(TOKENS["--t-micro"], "10px");
+  assert.equal(TOKENS["--t-head"], "21px");
+});
+
 test("every token the chrome references is defined in design.css", () => {
   const referenced = new Set();
   for (const f of SURFACES) {

@@ -72,6 +72,43 @@ project names, the OPEN action. Slab appears exactly once per page, on the
 tally. Mono carries everything countable, plus every small-capital label, which
 is what keeps ports, counts and paths aligned in a column.
 
+Five sizes, and five is the whole ladder. Both surfaces are a panel and a list
+set small, so a wider scale only produces sizes indistinguishable from their
+neighbours. That is what the chrome had before this existed: twelve sizes
+between 9.5px and 21px across `hub.mjs`, `overlay.js` and `proxy.mjs`, eight of
+them within half a pixel of another one, because each was chosen where it was
+written and nothing held a list. Each step below is the value that was already
+carrying the most declarations at its rung, so adopting the ladder moved no text
+by more than 1px.
+
+| Token | Value | Used on |
+| --- | --- | --- |
+| `--t-micro` | `10px` | Colophon, family labels, column heads, the overlay footer. |
+| `--t-row` | `11.5px` | Mono rows: counts, ports, route lists, paths. |
+| `--t-body` | `12.5px` | Blurbs, notes, the OPEN action, code. |
+| `--t-lead` | `14px` | Hub body text, project names, the overlay sheet head. |
+| `--t-head` | `21px` | Section heads. |
+
+The display sizes are deliberately not on it. `h1` in the hub and the proxy, and
+the tally, are `clamp()`ed against the viewport, because wood type is sized to
+the sheet rather than to a scale.
+
+Leading is keyed to the register rather than to the size. A row of tracked
+capitals sets open, because `--track-caps` and `--track-micro` push the letters
+apart and a tight line then reads as a smear.
+
+| Token | Value | Used on |
+| --- | --- | --- |
+| `--lh-solid` | `1` | Single-line display and label rows. |
+| `--lh-tight` | `1.2` | Project names, sheet heads. |
+| `--lh-snug` | `1.4` | Two-line labels, taglines. |
+| `--lh-body` | `1.55` | Running text and log panels. |
+| `--lh-open` | `1.9` | Tracked small capitals and route lists. |
+
+The one exemption is a leading below 1: a 78-pixel headline is led for itself
+(`.78`, `.82`, `.94`), and the ladder starts at solid. `test/design.test.mjs`
+enforces both tables, the same way it enforces the ink table above.
+
 Tracking follows the press rule: wood type is set tight and large, small
 capitals are set wide, and the smaller they get the wider they go.
 

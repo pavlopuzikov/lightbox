@@ -114,6 +114,33 @@ on top of forty other design systems while you judge them.
   can never find those, which is the same blind spot that shipped 0.1.0 without
   its audit commands.
 
+### The type in the chrome was on no scale at all
+
+The colour audit above left the system half-built and reading as finished. Every
+hex literal was gone and a test enforced that, but nothing held type, so the
+three files that draw lightbox's own chrome carried **twelve font sizes between
+9.5px and 21px**, eight of them within half a pixel of another one, and fifteen
+line-heights, several a hundredth apart. Nothing was wrong on any single line,
+which is how it survived an audit those files otherwise pass cleanly.
+
+- `design.css` now defines the ladder: `--t-micro` 10px, `--t-row` 11.5px,
+  `--t-body` 12.5px, `--t-lead` 14px, `--t-head` 21px, and five leadings from
+  `--lh-solid` to `--lh-open`. Five steps, because both surfaces are a panel and
+  a list set small and a wider scale only produces sizes indistinguishable from
+  their neighbours.
+- Each step is the value that was already carrying the most declarations at its
+  rung, so `hub.mjs`, `overlay.js` and `proxy.mjs` moved onto it without moving
+  any text by more than 1px. Verified in a browser rather than by reading the
+  diff: the `font:` shorthand takes `var()` on both halves, and every selector
+  resolves to its intended step, family and leading.
+- Two exemptions, both narrow. The display sizes stay `clamp()`ed against the
+  viewport, because wood type is sized to the sheet rather than to a scale, and
+  a leading below 1 stays a literal, because a 78px headline is led for itself.
+- `test/design.test.mjs` fails on a raw px font size or a leading of 1 or more
+  in any of the three surfaces, and separately on the ladder growing past five
+  steps. The first guard alone would not have stopped this: adding `--t-6`
+  through `--t-11` is the same drift with a token in front of it.
+
 ### Nothing that was not measured reports as zero any more
 
 This was the organising defect, and it was measurable in the audit data on

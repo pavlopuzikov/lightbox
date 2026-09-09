@@ -68,6 +68,43 @@
   --track-micro: 0.16em;
 
   /* --------------------------------------------------------------- *
+   * Type sizes
+   *
+   * Five steps, and five is the whole ladder. Both surfaces are a panel and a
+   * list set small, so a wider scale would only produce sizes indistinguishable
+   * from their neighbours. That is precisely what happened before this existed:
+   * twelve sizes between 9.5px and 21px across the three chrome files, eight of
+   * them half a pixel from another one, because each was chosen where it was
+   * written rather than picked off a list. Nothing enforced a list, so there was
+   * none.
+   *
+   * Each step is the value that was already carrying the most declarations at
+   * that rung, so adopting the ladder moved no text by more than 1px. The
+   * display sizes are deliberately NOT on it: h1 in the hub and the proxy, and
+   * the tally, are clamp()ed against the viewport, because wood type is sized
+   * to the sheet rather than to a scale.
+   * --------------------------------------------------------------- */
+  --t-micro: 10px;
+  --t-row: 11.5px;
+  --t-body: 12.5px;
+  --t-lead: 14px;
+  --t-head: 21px;
+
+  /* --------------------------------------------------------------- *
+   * Leading
+   *
+   * Keyed to the register, not to the size. Display type sets solid; a row of
+   * tracked capitals sets open, because --track-caps and --track-micro push the
+   * letters apart horizontally and a tight line then reads as a smear. Same
+   * story as the sizes: fifteen values before this, several a hundredth apart.
+   * --------------------------------------------------------------- */
+  --lh-solid: 1;
+  --lh-tight: 1.2;
+  --lh-snug: 1.4;
+  --lh-body: 1.55;
+  --lh-open: 1.9;
+
+  /* --------------------------------------------------------------- *
    * Rules
    *
    * Three weights, and the hierarchy is carried by weight alone: a heavy bar

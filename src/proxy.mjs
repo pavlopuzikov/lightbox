@@ -423,17 +423,17 @@ const PAGE_CSS =
   rootCss() +
   `
 body{margin:0;background:var(--paper);color:var(--ink);
-font:14px/1.65 var(--sans);-webkit-font-smoothing:antialiased}
+font:var(--t-lead)/var(--lh-body) var(--sans);-webkit-font-smoothing:antialiased}
 main{max-width:680px;margin:0 auto;padding:76px 32px 72px}
-.eyebrow{margin:0 0 13px;font:10px/1 var(--mono);text-transform:uppercase;
+.eyebrow{margin:0 0 13px;font:var(--t-micro)/var(--lh-solid) var(--mono);text-transform:uppercase;
 letter-spacing:var(--track-micro);color:var(--ink-3)}
 h1{margin:0;font:400 clamp(34px,6vw,54px)/0.94 var(--display);font-stretch:condensed;
 text-transform:uppercase;letter-spacing:var(--track-display)}
 .rule-heavy{height:var(--rule-heavy);background:var(--ink);margin:14px 0 0}
 .band{height:var(--ornament-height);margin:9px 0 0;opacity:.55;
 background-image:var(--ornament);background-repeat:repeat-x;background-position:left center}
-p{margin:22px 0 0;max-width:58ch;font-size:13.5px;color:var(--ink-2)}
-code{padding:1px 5px;background:var(--paper-tint);font:12.5px var(--mono)}
+p{margin:22px 0 0;max-width:58ch;font-size:var(--t-lead);color:var(--ink-2)}
+code{padding:1px 5px;background:var(--paper-tint);font:var(--t-body) var(--mono)}
 .err{color:var(--vermilion)}
 .err:empty{display:none}
 
@@ -442,7 +442,7 @@ code{padding:1px 5px;background:var(--paper-tint);font:12.5px var(--mono)}
 .acts{display:flex;flex-wrap:wrap;gap:12px;margin:28px 0 0}
 button,a.btn{appearance:none;display:inline-block;cursor:pointer;text-decoration:none;
 padding:8px 14px;background:var(--paper-2);color:var(--ink);border:2px solid var(--ink);
-box-shadow:3px 3px 0 var(--ink);font:11px/1 var(--mono);text-transform:uppercase;
+box-shadow:3px 3px 0 var(--ink);font:var(--t-row)/var(--lh-solid) var(--mono);text-transform:uppercase;
 letter-spacing:var(--track-caps);
 transition:transform var(--tap) var(--ease),box-shadow var(--tap) var(--ease)}
 button:hover,a.btn:hover{background:var(--paper-tint)}
@@ -451,20 +451,20 @@ button[disabled]{cursor:default;color:var(--ink-3);transform:translate(3px,3px);
 
 /* Machine output, in the margin, the way the hub sets it. */
 pre{margin:30px 0 0;padding:11px 0 11px 14px;border-left:var(--rule-mid) solid var(--rule-ink);
-overflow:auto;max-height:44vh;white-space:pre-wrap;font:11px/1.7 var(--mono);color:var(--ink-3)}
+overflow:auto;max-height:44vh;white-space:pre-wrap;font:var(--t-row)/var(--lh-open) var(--mono);color:var(--ink-3)}
 
 /* The directory listing is tabular matter, so it is ruled both ways. */
 .cols{display:grid;grid-template-columns:74px 1fr;margin:30px 0 0;padding:0 4px 7px;
-font:9.5px/1.4 var(--mono);text-transform:uppercase;letter-spacing:var(--track-micro);
+font:var(--t-micro)/var(--lh-snug) var(--mono);text-transform:uppercase;letter-spacing:var(--track-micro);
 color:var(--ink-3);border-bottom:var(--rule-hair) solid var(--rule-ink)}
 .idx{list-style:none;margin:0;padding:0}
 .idx li{border-bottom:var(--rule-hair) solid var(--rule-ink)}
 .idx a{display:grid;grid-template-columns:74px 1fr;align-items:baseline;
 padding:9px 4px;color:var(--ink);text-decoration:none}
 .idx a:hover{background:var(--paper-tint)}
-.idx .k{padding-right:12px;font:9.5px/1.9 var(--mono);text-transform:uppercase;
+.idx .k{padding-right:12px;font:var(--t-micro)/var(--lh-open) var(--mono);text-transform:uppercase;
 letter-spacing:var(--track-micro);color:var(--ink-3)}
-.idx .n{padding-left:12px;border-left:var(--rule-hair) solid var(--rule-ink-2);font-size:13px}
+.idx .n{padding-left:12px;border-left:var(--rule-hair) solid var(--rule-ink-2);font-size:var(--t-body)}
 .idx .n b{font-weight:400}
 
 a:focus-visible,button:focus-visible{outline:var(--rule-mid) solid var(--vermilion);
