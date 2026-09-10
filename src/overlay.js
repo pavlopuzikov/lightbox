@@ -786,9 +786,11 @@
        then buried. lightbox's own bar dodges this by accident, because its host
        is `all: initial` and therefore static.
 
-       Fixing it here means giving the host the z-index its contents already
-       assume. Above lightbox's own bar, because while you are inspecting, the
-       thing you are inspecting with belongs on top. */
+       The inspector now sets this on its own host, so on a current clone this
+       line is a no-op writing the same value. It stays because lightbox picks
+       up whatever sibling clone is on disk, and an older one still has the bug.
+       The value is deliberately above lightbox's own bar: while you are
+       inspecting, the thing you are inspecting with belongs on top. */
     hostEl.style.zIndex = "2147483000";
     var s = document.createElement("style");
     s.setAttribute("data-lightbox-dock", "");
@@ -822,11 +824,11 @@
      [data-element-review-inspector] since 3.0.0 and was [data-inspect-comment]
      before it, and lightbox has to dress whichever one is actually installed.
 
-     Querying only the old name does more than leave the dock undressed. The
-     z-index lift dressDock puts on the host IS the fix for inspect-comment's own
-     stacking bug, so a stale selector here leaves the dock drawn in its own
-     near-black pill, on a dark site, buried under the page. Undressed and
-     invisible are the same outcome. */
+     Querying only the old name does more than leave the dock undressed. It
+     also skips the z-index lift, which on a pre-fix clone is the only thing
+     keeping the dock above the page, so a stale selector leaves it drawn in
+     its own near-black pill, on a dark site, buried. Undressed and invisible
+     are the same outcome. */
   function inspectorHost() {
     return (
       document.querySelector("[data-element-review-inspector]") ||
