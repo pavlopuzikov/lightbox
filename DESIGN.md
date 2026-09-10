@@ -187,6 +187,30 @@ project name instead and read as a stray rule; run the full width, a finished
 project drew a 2px black line the width of the sheet and cut the list in half
 in the wrong place.
 
+### The scrollbar
+
+A scrollbar is chrome, and until 2026-09-10 it was the one piece of chrome in
+the tool that still belonged to the browser. It sits on the right edge of the
+route sheet, which is a bordered cream panel floating over somebody else's page,
+where a rounded grey pill is impossible not to see.
+
+It is drawn the way everything else is drawn: `--paper-2` track, `--ink` thumb,
+a `--rule-hair` where the track meets the sheet, no radius. It does not take
+vermilion on hover, because red means the tally or a failure and a scrollbar is
+neither. The document-level scrollbar on the hub and on the pages the proxy
+serves itself gets the same treatment at 12px; the sheet's is 10px, because the
+sheet is 500px wide and the page is not.
+
+Both spellings ship, and they are not interchangeable: `scrollbar-width` and
+`scrollbar-color` are the standard properties and all Firefox has,
+`::-webkit-scrollbar` is what Chrome honours and it wins there.
+
+**Headless Chromium reports every scrollbar as 0px wide.** Measured
+2026-09-10: `offsetWidth - clientWidth` on a plain styled element came back 4px
+(the border alone) headless and 14px headed, and a probe with no
+`::-webkit-scrollbar` rule at all measured 15px against the rule's 10px. A
+headless run is not evidence about this rule either way.
+
 Below 900px the row falls to three columns carrying six fields. The verticals
 no longer line up with anything, so they go, and the head goes with them.
 
@@ -270,6 +294,18 @@ its header:
    The ornaments are percent-encoded for that reason.
 2. **Colours stay literal hex**, because this table quotes them and the checker
    compares the two.
+
+Two on the surfaces that consume it:
+
+1. **No colour, no type size, no leading and no spacing value typed inline.**
+2. **No font on the universal selector.** `*` matches every element directly, so
+   it out-ranks any family a parent set and inheritance can never reach past it.
+   The overlay carried `*{font-family:var(--sans)}` and it silently beat the
+   mono that `.sheet a` set in a `font:` shorthand: the route paths measured
+   -apple-system 11.5px inside a row that was otherwise mono, and the diff
+   showed nothing. Families go on `:host` and on the element that means it.
+   Buttons are the one thing that does not inherit `font`, and the overlay's
+   `button` rule sets its own.
 
 Neither surface may hardcode a colour. `test/design.test.mjs` fails if either
 one does, and fails if the chrome references a `var()` this file does not

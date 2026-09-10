@@ -33,6 +33,24 @@ const esc = (s) =>
 const CSS = rootCss() + `
 *{box-sizing:border-box}
 html{background:var(--paper)}
+
+/* The scrollbar, drawn as the system draws everything else: paper track, ink
+   thumb, a hairline where the track meets the sheet, and no radius. A browser
+   default scrollbar was the last piece of chrome here that was somebody
+   else's, and it sits on the edge of every page and every log panel where it
+   is impossible not to see. It does not take vermilion on hover: red means the
+   tally or a failure, and a scrollbar is neither.
+
+   Both spellings, because they are not interchangeable. scrollbar-width and
+   scrollbar-color are the standard properties and all Firefox has;
+   ::-webkit-scrollbar is what Chrome honours and it wins there. */
+html{scrollbar-width:thin;scrollbar-color:var(--ink) var(--paper-2)}
+::-webkit-scrollbar{width:12px;height:12px}
+::-webkit-scrollbar-track{background:var(--paper-2);border-left:var(--rule-hair) solid var(--rule-ink)}
+::-webkit-scrollbar-track:horizontal{border-left:0;border-top:var(--rule-hair) solid var(--rule-ink)}
+::-webkit-scrollbar-thumb{background:var(--ink);border:3px solid var(--paper-2)}
+::-webkit-scrollbar-thumb:hover{background:var(--ink-2)}
+::-webkit-scrollbar-corner{background:var(--paper-2)}
 body{margin:0;background:var(--paper);color:var(--ink);font:var(--t-lead)/var(--lh-body) var(--sans);
 -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
 

@@ -63,6 +63,20 @@ test("no surface hardcodes a type size or a leading", () => {
   }
 });
 
+test("no surface sets a font on the universal selector", () => {
+  // A `*` rule matches every element directly, so it out-ranks anything a
+  // parent set and inheritance can never reach past it. The overlay carried
+  // `*{font-family:var(--sans)}` and it quietly won over the mono that
+  // `.sheet a` set in a font shorthand: the route paths in the sheet measured
+  // -apple-system 11.5px inside a row that was otherwise mono. Nothing about
+  // the diff showed it, only a computed style in a browser did. Families
+  // belong on :host and on the element that means it.
+  for (const f of SURFACES) {
+    const hits = [...read(f).matchAll(/\*\s*\{[^}]*font(?:-family)?\s*:/g)].map((m) => m[0]);
+    assert.deepEqual(hits, [], `${f} sets a font on *: ${hits.join(", ")}`);
+  }
+});
+
 test("the type ladder is small enough to be a ladder", () => {
   // Five steps and five leadings. The guard above stops a raw px appearing; it
   // cannot stop --t-6 through --t-11 being added, which is the same drift with

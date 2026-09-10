@@ -161,6 +161,45 @@ across the three chrome files carried around thirty-five distinct values between
 - `test/design.test.mjs` fails on a raw px padding, margin or gap of 44 or less
   in any surface, and on the scale growing past nine steps.
 
+### The route sheet was a flat list of 36 paths
+
+Pointed at a 36-route project the sheet was one undifferentiated column, and
+`/ops/consultancy/new` sat between `/ops/repos/arios` and `/refs` with nothing
+saying the first two belong together. Reviewing a site is done a section at a
+time, and the sheet did not know sections existed.
+
+- **Routes group by their first segment**, with a rule-bordered micro-caps head
+  per group and the group's own `done/n` counter set right, tabular. A group of
+  one is not a group: single-child families stay flush in the top-level list
+  rather than earning a heading. Children drop the prefix the heading already
+  carries and sit in one whole spacing step, which is the only thing separating
+  them from a top-level page, which is why it is a step and not a hair.
+- **The scrollbar is drawn in the system.** Cream track, ink thumb, hairline
+  where the track meets the sheet, no radius, both the standard properties and
+  the `::-webkit-` pseudo-elements. The hub and the pages the proxy serves
+  itself get the same at 12px. Verified headed: 10px against a 15px default.
+  Headless Chromium reports every scrollbar as 0px and is no evidence here.
+- **A `*` rule was quietly beating the sheet's own type.** `*{font-family:
+  var(--sans)}` matched the route paths directly, so the mono that `.sheet a`
+  set in a `font:` shorthand never reached them: they measured -apple-system
+  11.5px inside a row that was otherwise mono. The family moved to `:host`,
+  where inheritance has the same reach and out-ranks nothing. A guard test in
+  `test/design.test.mjs` fails on any font declared on `*`.
+
+### The walk was right and looked broken
+
+Pressing next on a signed-out AriOS advanced the counter 27 to 28 to 29 to 31
+while every route answered with `/login`, and the bar showed `/boards -> /login`
+each time. The tool was stepping correctly and the site was refusing to move,
+which from the chair is indistinguishable from a broken next button. Driving the
+review port directly with a minted session cookie landed the same walk on `/` at
+1 of 36, which is what proved it.
+
+The overlay now counts consecutive routes that redirect to one path and, at two
+in a row, says so above the bar in vermilion: how many routes answered with it,
+that the walk is stepping and the site is not, and that signing in here will let
+the pages follow. It is a notice, not a fix, because there was nothing to fix.
+
 ### Nothing that was not measured reports as zero any more
 
 This was the organising defect, and it was measurable in the audit data on

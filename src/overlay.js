@@ -73,6 +73,31 @@
        behaviour rather than failing. */
   }
 
+  /* How many different routes in a row have answered with this same path.
+     One redirect is a redirect. Several in a row, all landing on the same
+     page, is a gate: an app that wants a session, and every page of the walk
+     is that app's login screen. The walk itself is working perfectly in that
+     case, which is exactly why it needs saying out loud. The counter is what
+     ".path.moved" cannot show, because a red arrow looks the same on the
+     second page as on the sixth.
+
+     Measured on AriOS 2026-09-09: next advanced 27 -> 28 -> 29 -> 31 and the
+     bar read "/boards -> /login" each time, so the tool was right and looked
+     broken. */
+  var GATE_KEY = WALK_KEY + ":gate";
+  var gateCount = 0;
+  try {
+    var prevGate = JSON.parse(sessionStorage.getItem(GATE_KEY) || "null");
+    if (redirected) {
+      gateCount = prevGate && prevGate.at === location.pathname ? prevGate.n + 1 : 1;
+      sessionStorage.setItem(GATE_KEY, JSON.stringify({ at: location.pathname, n: gateCount }));
+    } else {
+      sessionStorage.removeItem(GATE_KEY);
+    }
+  } catch (e) {
+    /* no storage, no gate detection. The bar still shows the arrow. */
+  }
+
   /* ---------------------------------------------------------------- *
    * Chrome
    * ---------------------------------------------------------------- */
@@ -96,7 +121,17 @@
   var style = document.createElement("style");
   style.textContent = [
     ":host{all:initial;" + vars + "}",
-    "*{box-sizing:border-box;font-family:var(--sans)}",
+    /* The family goes on the host, not on `*`. A universal selector matches
+       every element directly, so it beat the family that `.sheet a`'s font
+       shorthand set and that its inner <span class="p"> should have inherited:
+       measured on the AriOS sheet, the route paths came back -apple-system
+       11.5px while the row around them was mono. Inheritance from :host gets
+       the same reach without out-ranking anything, and `all: initial` does not
+       stop it, because a declaration on :host is not a reset. Buttons are the
+       one thing that does not inherit font, and the button rule below sets its
+       own, so nothing here needs a form-control exemption. */
+    ":host{font-family:var(--sans)}",
+    "*{box-sizing:border-box}",
 
     /* The bar. A red rule along the top edge and a hard offset impression
        below it: no blur, because a press does not cast a shadow, and a second
@@ -163,12 +198,51 @@
     ".sheet a .p{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
     ".sheet a .dyn{color:var(--ink-3);font-size:var(--t-micro);text-transform:uppercase;",
     "letter-spacing:var(--track-caps);flex:none;margin-left:auto}",
-    ".fam{padding:var(--s-5) var(--s-6) var(--s-1);color:var(--ink-3);font:var(--t-micro)/var(--lh-body) var(--mono);",
+    /* A section head, not a caption. It carries a rule the way every other
+       heading in this system does, and it holds the section's own progress on
+       the right, because the open question in a review is which block is
+       unfinished rather than what the block is called. */
+    ".fam{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s-4);",
+    "margin:var(--s-5) var(--s-6) 0;padding:0 0 var(--s-1);color:var(--ink-2);",
+    "border-bottom:var(--rule-mid) solid var(--ink);",
+    "font:var(--t-micro)/var(--lh-body) var(--mono);",
     "text-transform:uppercase;letter-spacing:var(--track-micro)}",
+    ".fam:first-of-type{margin-top:var(--s-2)}",
+    ".famn{color:var(--ink-3);letter-spacing:var(--track-caps);font-variant-numeric:tabular-nums}",
+    /* Children of a section sit in from its rule, so the blocks read as blocks
+       and the ungrouped top-level pages stay flush. That indent is the only
+       thing separating them, which is why it is a whole step and not a hair. */
+    ".sheet a.in{padding-left:var(--s-7)}",
     ".foot{padding:var(--s-5) var(--s-6) var(--s-5);color:var(--ink-3);font:var(--t-micro)/var(--lh-open) var(--mono);",
     "border-top:2px solid var(--ink)}",
     "kbd{border:1px solid var(--rule-ink);background:var(--paper-2);padding:var(--s-1) var(--s-2);",
     "color:var(--ink-2);font:var(--t-micro)/var(--lh-solid) var(--mono)}",
+
+    /* The scrollbar. A browser default scrollbar on a letterpress sheet is the
+       one piece of chrome in this overlay that was still somebody else's, and
+       it sits on the right edge of the panel where it is impossible not to
+       see. Drawn as the system draws everything else: paper track, ink thumb,
+       a hairline where the track meets the sheet, and no radius. It does not
+       take vermilion on hover, because red means the tally or a failure and a
+       scrollbar is neither.
+
+       Both spellings, because they are not interchangeable. scrollbar-width /
+       scrollbar-color is the standard property and all Firefox has;
+       ::-webkit-scrollbar is what Chrome honours and it wins there. */
+    ".sheet{scrollbar-width:thin;scrollbar-color:var(--ink) var(--paper-2)}",
+    ".sheet::-webkit-scrollbar{width:10px}",
+    ".sheet::-webkit-scrollbar-track{background:var(--paper-2);",
+    "border-left:var(--rule-hair) solid var(--rule-ink)}",
+    ".sheet::-webkit-scrollbar-thumb{background:var(--ink);border:2px solid var(--paper-2)}",
+    ".sheet::-webkit-scrollbar-thumb:hover{background:var(--ink-2)}",
+
+    /* The gate notice. Vermilion, because this is the failure case: the walk is
+       stepping and the site is not letting it through. */
+    ".gate{position:fixed;left:18px;bottom:calc(18px + 41px);z-index:2147482000;",
+    "max-width:min(560px,88vw);background:var(--paper);color:var(--ink);",
+    "border:2px solid var(--vermilion);box-shadow:4px 4px 0 var(--vermilion-2);",
+    "padding:var(--s-4) var(--s-5);font:var(--t-row)/var(--lh-snug) var(--mono)}",
+    ".gate[hidden]{display:none}",
   ].join("");
   root.appendChild(style);
 
@@ -200,11 +274,19 @@
   hub.textContent = "hub";
   hub.title = "Back to the hub (Alt+H)";
 
+  /* The gate notice. It sits above the bar rather than inside it, because it
+     is about the whole walk and not about this page, and it is the one place
+     in the overlay besides a failure where vermilion is spent. */
+  var gate = document.createElement("div");
+  gate.className = "gate";
+  gate.hidden = true;
+
   bar.appendChild(prev);
   bar.appendChild(label);
   bar.appendChild(next);
   bar.appendChild(mark);
   bar.appendChild(hub);
+  root.appendChild(gate);
   root.appendChild(bar);
 
   var sheet = document.createElement("div");
@@ -279,6 +361,18 @@
     label.appendChild(ct);
     label.appendChild(pt);
 
+    /* Two in a row is the threshold. One redirect is a redirect and the arrow
+       in the bar says so; two different routes answering with the same page
+       means the site is not letting the walk through. */
+    if (gateCount >= 2) {
+      gate.hidden = false;
+      gate.textContent =
+        gateCount + " routes in a row answered with " + location.pathname +
+        ". The walk is stepping, the site is not. Sign in here and the pages will follow.";
+    } else {
+      gate.hidden = true;
+    }
+
     prev.disabled = step(index, -1) === -1;
     next.disabled = step(index, 1) === -1;
     mark.textContent = reviewed.has(location.pathname) ? "reviewed" : "mark done";
@@ -301,27 +395,67 @@
       if (r.family !== lastFam) famCount++;
       lastFam = r.family;
     });
+    /* The list is grouped, and the grouping has to do more than print a name.
+       AriOS is the case that showed why: eighteen families, twelve of them a
+       single route, scattered between the six real sections, so the sheet read
+       as block, loose line, loose line, block, loose line. Three changes, none
+       of which reorder anything, because the display order IS the walk order
+       and clicking row seven has to be the same page as pressing next six
+       times.
+
+         - A family of one gets no header. It is a top-level page and prints as
+           its own full path, which is already the shortest true label for it.
+         - A family of more gets a header, and its children print with the
+           family prefix stripped. "/ops/repos/arios" under an "ops" heading is
+           "repos/arios", which is the part you are choosing between.
+         - Paths are percent-decoded for display. The vault routes carry
+           "%20-%20Projects%20%26%20" in them, which is thirty characters of
+           nothing, and the href keeps the encoded original. */
     lastFam = null;
     routes.forEach(function (r, i) {
-      if (r.family && r.family !== lastFam) {
-        lastFam = r.family;
-        var n = 0;
-        for (var k = 0; k < routes.length; k++) if (routes[k].family === r.family) n++;
-        if (famCount > 1 && n > 1) {
-          var fh = document.createElement("div");
-          fh.className = "fam";
-          fh.textContent = r.family + " · " + n;
-          sheet.appendChild(fh);
-        }
+      var n = 0;
+      for (var k = 0; k < routes.length; k++) if (routes[k].family === r.family) n++;
+      var grouped = famCount > 1 && n > 1;
+
+      if (grouped && r.family !== lastFam) {
+        var done = 0;
+        for (var j = 0; j < routes.length; j++)
+          if (routes[j].family === r.family && reviewed.has(routes[j].path)) done++;
+        var fh = document.createElement("div");
+        fh.className = "fam";
+        var fn = document.createElement("span");
+        fn.textContent = r.family.replace(/^\//, "");
+        var fc = document.createElement("span");
+        fc.className = "famn";
+        /* Progress per section, in the same vocabulary as the dots: the
+           question a reviewer actually has open is which block is unfinished. */
+        fc.textContent = done + "/" + n;
+        fh.appendChild(fn);
+        fh.appendChild(fc);
+        sheet.appendChild(fh);
       }
+      lastFam = r.family;
+
       var a = document.createElement("a");
       a.href = r.path;
-      if (i === index) a.className = "here";
+      a.className = (i === index ? "here" : "") + (grouped ? " in" : "");
       var d = document.createElement("span");
       d.className = "dot" + (reviewed.has(r.path) ? "" : " todo");
       var p = document.createElement("span");
       p.className = "p";
-      p.textContent = r.path;
+      var shown = r.path;
+      if (grouped && r.path !== r.family && r.path.indexOf(r.family + "/") === 0) {
+        shown = r.path.slice(r.family.length + 1);
+      }
+      /* A malformed escape throws rather than returning the input, and one bad
+         route should not empty the sheet. */
+      try {
+        shown = decodeURIComponent(shown);
+      } catch (e) {
+        /* keep it encoded */
+      }
+      p.textContent = shown;
+      p.title = r.path;
       a.appendChild(d);
       a.appendChild(p);
       if (r.dynamic) {

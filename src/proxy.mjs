@@ -424,6 +424,16 @@ const PAGE_CSS =
   `
 body{margin:0;background:var(--paper);color:var(--ink);
 font:var(--t-lead)/var(--lh-body) var(--sans);-webkit-font-smoothing:antialiased}
+
+/* Same scrollbar as the hub; see the comment there. These are the pages you
+   land on when something is wrong, so they get the system too. */
+html{scrollbar-width:thin;scrollbar-color:var(--ink) var(--paper-2)}
+::-webkit-scrollbar{width:12px;height:12px}
+::-webkit-scrollbar-track{background:var(--paper-2);border-left:var(--rule-hair) solid var(--rule-ink)}
+::-webkit-scrollbar-track:horizontal{border-left:0;border-top:var(--rule-hair) solid var(--rule-ink)}
+::-webkit-scrollbar-thumb{background:var(--ink);border:3px solid var(--paper-2)}
+::-webkit-scrollbar-thumb:hover{background:var(--ink-2)}
+::-webkit-scrollbar-corner{background:var(--paper-2)}
 main{max-width:680px;margin:0 auto;padding:76px var(--s-8) 72px}
 .eyebrow{margin:0 0 var(--s-5);font:var(--t-micro)/var(--lh-solid) var(--mono);text-transform:uppercase;
 letter-spacing:var(--track-micro);color:var(--ink-3)}
