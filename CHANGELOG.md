@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+### The review loop, read from the reviews rather than from the code
+
+Eight sittings against one project's own pages, 27 notes, were the evidence for
+this pass. Reading them said more about what the tool was missing than reading
+the tool did.
+
+- **No review had ever carried an image.** Ids 1 through 24, no exceptions, and
+  not because of a bug: the inspector's Shot button asks for a click per note
+  and the first click raises a screen-share picker, so nobody ever pressed it.
+  Meanwhile about half the notes were comparative, "width doesnt match the other
+  links", the kind that is about pixels. Arming **shots** on the bar now
+  captures every subsequent note automatically. The frame is the viewport, not a
+  crop of the element, because a crop cannot answer a question about siblings.
+  Frames live in `.lightbox/reviews/<key>/shots/` and only paths are forwarded:
+  the bridge deletes a review's images when it evicts one past its twentieth.
+- **The archive was the one copy without the screenshot paths.** They were
+  resolved downstream by the bridge, whose store is capped, while `inbox.md`,
+  which is not capped, got the browser's placeholder. The markdown is finished
+  before it is archived now.
+- **A review said what was wrong but not where to go and see it.** Every review
+  now carries its review port and upstream, so an agent reading it hours later
+  can reopen the exact page.
+- **`progress.json` held two routes against 45 projects**, because marking a
+  page done is a second act of bookkeeping after the reviewing is finished.
+  Submitting a review for a route now marks it. `Alt`+`M` remains, for the page
+  you looked at and had nothing to say about.
+- **The reviewed dot is binary, which answers the wrong question.** The route
+  sheet now shows notes per route, recounted from `inbox.md` when there is no
+  index, so the counts were already there for every past sitting.
+- **The always-on hub had failed 82 times in a row.** `scripts/hub-loop.cmd`
+  probes `127.0.0.1:4000` while the hub binds `0.0.0.0:4000`, and on Windows
+  those are different addresses that can be held at once. The guard passed, the
+  hub then failed `EADDRINUSE`, and the loop retried every ten seconds forever.
+  `serve` now exits `3` on a port clash so the loop can wait rather than
+  restart. **The matching probe fix in `hub-loop.cmd` is still outstanding.**
+- **`src/overlay.js` had no executing test**, despite being the entire
+  user-facing surface. It runs in `node:vm` against a stub DOM now, pinning the
+  walk arithmetic rather than the drawing.
+
 The tool was used to run a front-end audit across 42 projects, and the audit is
 what produced this list. Everything here is a defect the pass found in the tool
 itself rather than in the projects it was pointed at.

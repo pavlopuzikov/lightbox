@@ -189,7 +189,28 @@ kinds of key cannot collide.
 | `Alt`+`F` | Focus-order overlay (inspect-comment) |
 
 The bar at the bottom of every page shows where you are in the walk and opens
-the full route list, grouped by family.
+the full route list, grouped by family. Marking is also automatic: submitting a
+review for a route marks it. `Alt`+`M` is for the page you looked at and had
+nothing to say about, which is the one case that cannot be inferred.
+
+## Screenshots
+
+Press **shots** on the bar once and grant the screen-share prompt. From then on,
+every note you add is captured with the screen you added it on, and the path
+lands in the note next to your comment.
+
+The frame is the whole viewport rather than a crop of the element, because half
+the notes in a real review are comparative ("width doesnt match the other
+links") and a crop of one element cannot answer a question about its siblings.
+The element's rectangle is recorded as coordinates instead.
+
+Frames go to `.lightbox/reviews/<key>/shots/` and only their paths are forwarded
+to the bridge. That is deliberate: the bridge deletes a review's image files
+when it evicts one past its twentieth, so anything stored only there disappears
+after twenty sittings.
+
+Arming is per page, not per session. The capture stream ends on every
+navigation, which is a property of running inside the document being reviewed.
 
 ## What is written to disk
 
@@ -199,6 +220,8 @@ it is gitignored:
 | Path | Holds |
 | --- | --- |
 | `progress.json` | Which routes are marked done, per project |
+| `reviews/<key>/index.json` | Notes recorded per route, and when that route was last reviewed. Derived: delete it and it is recounted from `inbox.md` |
+| `reviews/<key>/shots/` | Viewport frames captured while notes were written |
 | `reviews/reviews.json` | Reviews received by the bridge, plus their screenshots |
 | `reviews/<key>/inbox.md` | Every review for that project, appended as it arrives, before the bridge's twenty-review cap can lose it |
 | `reviews/<key>/review-<id>.md` | What `reviews.mjs drain` copied out, with the screenshots beside it; `reviews/drained.json` lists the ids taken |
