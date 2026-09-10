@@ -12,6 +12,7 @@ import { buildCatalogue, inspectCommentSearch } from "./catalogue.mjs";
 import { createHubServer } from "./hub.mjs";
 import { Handover } from "./handover.mjs";
 import { Progress } from "./progress.mjs";
+import { Notes, countNotes } from "./notes.mjs";
 import { createProjectServer } from "./proxy.mjs";
 import { routesFor } from "./routes.mjs";
 import { Supervisor, portOpen } from "./supervisor.mjs";
@@ -160,7 +161,7 @@ async function ensureBridge(bridge, inspectCommentPath, stateDir, log) {
  * forwarded. The bridge keeps only its last twenty; a long sitting across many
  * projects would otherwise lose the early ones before anyone read them.
  */
-function archiveReview(stateDir) {
+function archiveReview(stateDir, notes) {
   return (project, payload) => {
     if (typeof payload.markdown !== "string" || !payload.markdown.trim()) return;
     const dir = path.join(stateDir, "reviews", project.key);
@@ -172,6 +173,15 @@ function archiveReview(stateDir) {
       );
     } catch {
       /* the forward still happens; the archive is a safety net, not the path */
+    }
+    // The prose is written first and unconditionally. The counts are derived
+    // from it, so they come second and may fail on their own.
+    try {
+      if (notes && payload.page) {
+        notes.record(project.key, new URL(payload.page).pathname, countNotes(payload.markdown));
+      }
+    } catch {
+      /* a page value that is not a URL leaves the counts where they were */
     }
   };
 }
@@ -187,6 +197,7 @@ export async function serve(config, cwd = process.cwd(), opts = {}) {
   supervisor.watchHealth();
   const progress = new Progress(path.join(stateDir, "progress.json"));
   const handover = new Handover(path.join(stateDir, "handover.json"));
+  const notes = new Notes(path.join(stateDir, "reviews"));
   const inspectSearch = inspectCommentSearch(config, cwd);
   const inspectCommentPath = inspectSearch.path;
   const hubUrl = `http://localhost:${config.hubPort}/`;
@@ -221,7 +232,7 @@ export async function serve(config, cwd = process.cwd(), opts = {}) {
       bridge: config.bridge,
       overlayPath,
       inspectCommentPath,
-      onReview: opts.onReview || archiveReview(stateDir),
+      onReview: opts.onReview || archiveReview(stateDir, notes),
     };
     const server = createProjectServer(ctx);
     const r = await listen(server, project.port);
@@ -237,6 +248,7 @@ export async function serve(config, cwd = process.cwd(), opts = {}) {
     supervisor,
     progress,
     handover,
+    notes,
     hubUrl,
     hubPort: config.hubPort,
     hubOrigins: config.hubOrigins || [],
@@ -245,10 +257,17 @@ export async function serve(config, cwd = process.cwd(), opts = {}) {
   });
   const hubResult = await listen(hub, config.hubPort);
   if (!hubResult.ok) {
-    throw new Error(
+    const err = new Error(
       `The hub could not bind :${config.hubPort} (${hubResult.error.code}). ` +
         `Something else is using it, or a previous lightbox is still running.`
     );
+    /* scripts/hub-loop.cmd restarts this forever, and it has to tell two
+       failures apart: another hub already holds the port, which means wait and
+       leave it alone, versus this hub crashed, which means restart. Exit 3 is
+       the first. Without it the loop read a healthy neighbour as a crash and
+       retried every ten seconds, which is how serve.log reached 82 failures. */
+    err.exitCode = hubResult.error.code === "EADDRINUSE" ? 3 : 1;
+    throw err;
   }
 
   const pages = catalogue.projects.reduce((n, p) => n + routesFor(p).length, 0);
@@ -286,7 +305,18 @@ export async function serve(config, cwd = process.cwd(), opts = {}) {
     hub.close();
   };
 
-  return { catalogue, supervisor, progress, handover, servers, hub, shutdown, skipped, inspectCommentPath };
+  return {
+    catalogue,
+    supervisor,
+    progress,
+    handover,
+    notes,
+    servers,
+    hub,
+    shutdown,
+    skipped,
+    inspectCommentPath,
+  };
 }
 
 export { buildCatalogue, routesFor };

@@ -13,7 +13,7 @@ import { Progress } from "../src/progress.mjs";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 /** A static project server on an ephemeral port, plus the pieces it was given. */
-function serveStaticFixture(files) {
+function serveStaticFixture(files, extra = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lightbox-proxy-"));
   for (const [rel, body] of Object.entries(files)) fs.writeFileSync(path.join(dir, rel), body);
 
@@ -27,6 +27,7 @@ function serveStaticFixture(files) {
     bridge: "http://127.0.0.1:1",
     overlayPath: path.join(HERE, "..", "src", "overlay.js"),
     inspectCommentPath: null,
+    ...extra,
   };
   const server = createProjectServer(ctx);
   return new Promise((resolve) => {
@@ -36,6 +37,7 @@ function serveStaticFixture(files) {
         port,
         progress,
         project,
+        dir,
         close: () => new Promise((r) => server.close(r)),
       });
     });
@@ -299,5 +301,84 @@ test("the upstream's first WebSocket bytes go to the browser, never back upstrea
     up.closeAllConnections?.();
     await new Promise((r) => server.close(r));
     await new Promise((r) => up.close(r));
+  }
+});
+
+test("a forwarded review is stamped, says where to see it again, and marks the route", async () => {
+  // A stub bridge, because the real one is a separate process on 7391 and this
+  // test is about what leaves lightbox, not about what the MCP server does with
+  // it. Whatever body arrives here is what a coding agent eventually reads.
+  const seen = { bodies: [], archived: [] };
+  const bridge = http.createServer((req, res) => {
+    let b = "";
+    req.on("data", (c) => (b += c));
+    req.on("end", () => {
+      seen.bodies.push(b);
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end('{"ok":true}');
+    });
+  });
+  await new Promise((r) => bridge.listen(0, "127.0.0.1", r));
+
+  const { port, progress, project, close } = await serveStaticFixture(
+    { "index.html": PAGE },
+    {
+      bridge: `http://127.0.0.1:${bridge.address().port}`,
+      onReview: (p, payload) => seen.archived.push(payload.markdown),
+    }
+  );
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/__lb/bridge/review`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        page: "http://localhost:4008/career?tab=1",
+        markdown: "# Review: /career\n\n- Selector: `a.cta`\n\n**Comment:** width doesnt match\n",
+      }),
+    });
+    assert.equal(res.status, 200);
+
+    const forwarded = JSON.parse(seen.bodies[0]);
+    assert.equal(forwarded.project, project.key);
+    assert.match(forwarded.markdown, /^# Review: Fixture \(fixture-/m);
+    assert.match(forwarded.markdown, /^- Review port: http:\/\/localhost:0\/$/m);
+
+    // The archive is the uncapped record, so it must carry everything the
+    // bridge got. It used to run before the header was rewritten.
+    assert.equal(seen.archived.length, 1);
+    assert.equal(seen.archived[0], forwarded.markdown, "the archive sees the finished markdown");
+
+    // Submitting a review for a route is the evidence the route was reviewed.
+    // The query string is dropped; Progress keys on pathname, as the manual
+    // Alt+M path in overlay.js already does.
+    assert.deepEqual(progress.get(project.key), ["/career"]);
+  } finally {
+    await close();
+    await new Promise((r) => bridge.close(r));
+  }
+});
+
+test("a review whose page is not a URL still forwards", async () => {
+  const bridge = http.createServer((req, res) => {
+    req.resume();
+    req.on("end", () => res.end('{"ok":true}'));
+  });
+  await new Promise((r) => bridge.listen(0, "127.0.0.1", r));
+
+  const { port, progress, project, close } = await serveStaticFixture(
+    { "index.html": PAGE },
+    { bridge: `http://127.0.0.1:${bridge.address().port}`, onReview: () => {} }
+  );
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/__lb/bridge/review`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ page: "not a url", markdown: "# Review: /\n" }),
+    });
+    assert.equal(res.status, 200, "an unparseable page is not worth failing the review over");
+    assert.deepEqual(progress.get(project.key), [], "and nothing is marked on a guess");
+  } finally {
+    await close();
+    await new Promise((r) => bridge.close(r));
   }
 });

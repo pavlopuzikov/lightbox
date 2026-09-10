@@ -84,7 +84,13 @@ async function cmdList() {
 
 async function cmdServe() {
   const { config } = await loadConfig(cwd).catch((e) => die(e.message));
-  const run = await serve(config, cwd);
+  // serve() marks a port clash with exitCode 3 so the always-on loop can wait
+  // rather than restart. Printing the message without the stack also keeps
+  // .lightbox/serve.log readable on the days it does happen.
+  const run = await serve(config, cwd).catch((e) => {
+    console.error(e.message);
+    process.exit(e.exitCode || 1);
+  });
 
   let closing = false;
   const bye = async () => {

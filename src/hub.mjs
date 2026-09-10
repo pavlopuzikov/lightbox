@@ -212,6 +212,11 @@ overflow:hidden}
 .routes a:hover{color:var(--vermilion)}
 .routes .dyn{color:var(--ink-3);font-size:var(--t-micro);margin-left:auto;flex:none;
 text-transform:uppercase;letter-spacing:var(--track-caps)}
+/* Sits where .dyn sits. A route can be both dynamic and noted, so only the
+   first of the pair takes the auto margin that pushes it to the right. */
+.routes .notes{color:var(--ink-3);font-size:var(--t-micro);margin-left:auto;flex:none;
+text-transform:uppercase;letter-spacing:var(--track-caps)}
+.routes .dyn + .notes{margin-left:var(--s-4)}
 .routes .fam{margin-top:var(--s-4);color:var(--ink-3);font:var(--t-micro)/var(--lh-open) var(--mono);
 text-transform:uppercase;letter-spacing:var(--track-caps);break-after:avoid}
 pre{margin:0;padding:var(--s-5) var(--s-5);background:var(--paper-2);border:var(--rule-hair) solid var(--rule-ink);
@@ -357,7 +362,12 @@ function row(p, st, routes, done, hand) {
                 p.port
               }${esc(r.path)}"${
                 r.file ? ` title="${esc(r.file)}"` : ""
-              }>${esc(r.path)}</a>${r.dynamic ? '<span class="dyn">dynamic</span>' : ""}</li>`
+              }>${esc(r.path)}</a>${r.dynamic ? '<span class="dyn">dynamic</span>' : ""}${
+                // How much you have said here, which is the question the binary
+                // dot could never answer. Silent at zero: a page you have not
+                // written about yet should not carry a "0".
+                r.notes ? `<span class="notes">${r.notes} note${r.notes === 1 ? "" : "s"}</span>` : ""
+              }</li>`
           )
           .join("")
     )
@@ -368,6 +378,9 @@ function row(p, st, routes, done, hand) {
 
 function page(ctx) {
   const { catalogue, supervisor, progress, handover } = ctx;
+  // Optional, so a caller that only wants the shell (the tests, and any
+  // embedder) does not have to build a review archive to get one.
+  const notes = ctx.notes || { countFor: () => 0, totalFor: () => 0 };
   const sections = catalogue.groups
     .map((g) => {
       const items = catalogue.projects.filter((p) => p.group === g.id);
@@ -377,6 +390,7 @@ function page(ctx) {
           const routes = routesFor(p).map((r) => ({
             ...r,
             reviewed: progress.get(p.key).includes(r.path),
+            notes: notes.countFor(p.key, r.path),
           }));
           return row(p, supervisor.state(p), routes, progress.countFor(p.key), handover.get(p.key));
         })
@@ -411,7 +425,7 @@ function page(ctx) {
 <p class="colophon">
   <b>${catalogue.projects.length}</b>&nbsp;projects <i class="dia"></i>
   <b>${totalPages}</b>&nbsp;pages <i class="dia"></i>
-  inspect-comment ${ctx.inspectCommentPath ? "loaded" : '<span class="off">missing</span>'} <i class="dia"></i>
+  element inspector ${ctx.inspectCommentPath ? "loaded" : '<span class="off">missing</span>'} <i class="dia"></i>
   <span id="bridge">bridge ?</span>
   <span class="spacer"></span>
   <button class="text quiet" id="stopall">Stop all dev servers</button>

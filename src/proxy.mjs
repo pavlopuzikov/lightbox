@@ -567,12 +567,37 @@ async function forwardReview(body, ctx) {
   payload.project = ctx.project.key;
   payload.projectName = ctx.project.name;
   payload.projectDir = ctx.project.dir;
+  /* Where to go to see this again. A review is read hours later by an agent
+     that has only the markdown, and half the notes are comparative ("width
+     doesnt match the other links") - the kind that needs the page open, not a
+     description of it. One line makes that reproducible: an agent with browser
+     tools can reopen the exact port, and one without at least knows what it is
+     missing. Static projects have no upstream, so they only get the port. */
+  const origin = `http://localhost:${ctx.project.port}/`;
+  const where =
+    ctx.project.kind === "static"
+      ? `- Review port: ${origin}`
+      : `- Review port: ${origin} · upstream ${ctx.project.upstream}`;
   if (typeof payload.markdown === "string") {
     payload.markdown = payload.markdown.replace(
       /^# Review: (.*)$/m,
-      (m, page) => `# Review: ${label} ${page}\n- Project directory: \`${ctx.project.dir}\``
+      (m, page) =>
+        `# Review: ${label} ${page}\n- Project directory: \`${ctx.project.dir}\`\n${where}`
     );
   }
+
+  /* Submitting a review for a route is the evidence the route was reviewed, so
+     stop asking for the same fact twice. The manual Alt+M toggle stays: it is
+     how you record a page you looked at and had nothing to say about, which is
+     the one case this cannot infer. Progress.set keys on pathname, the same
+     thing overlay.js sends to /__lb/progress, so the two agree with no
+     migration. */
+  try {
+    if (payload.page) ctx.progress.set(ctx.project.key, new URL(payload.page).pathname, true);
+  } catch {
+    /* a page value that is not a URL is not worth failing the review over */
+  }
+
   ctx.onReview?.(ctx.project, payload);
 
   const target = new URL("/review", ctx.bridge);
