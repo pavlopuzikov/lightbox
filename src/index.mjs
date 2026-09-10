@@ -13,6 +13,7 @@ import { createHubServer } from "./hub.mjs";
 import { Handover } from "./handover.mjs";
 import { Progress } from "./progress.mjs";
 import { Notes, countNotes } from "./notes.mjs";
+import { Shots } from "./shots.mjs";
 import { createProjectServer } from "./proxy.mjs";
 import { routesFor } from "./routes.mjs";
 import { Supervisor, portOpen } from "./supervisor.mjs";
@@ -198,6 +199,7 @@ export async function serve(config, cwd = process.cwd(), opts = {}) {
   const progress = new Progress(path.join(stateDir, "progress.json"));
   const handover = new Handover(path.join(stateDir, "handover.json"));
   const notes = new Notes(path.join(stateDir, "reviews"));
+  const shots = new Shots(path.join(stateDir, "reviews"));
   const inspectSearch = inspectCommentSearch(config, cwd);
   const inspectCommentPath = inspectSearch.path;
   const hubUrl = `http://localhost:${config.hubPort}/`;
@@ -228,6 +230,7 @@ export async function serve(config, cwd = process.cwd(), opts = {}) {
       project,
       supervisor,
       progress,
+      shots,
       hubUrl,
       bridge: config.bridge,
       overlayPath,
@@ -311,6 +314,7 @@ export async function serve(config, cwd = process.cwd(), opts = {}) {
     progress,
     handover,
     notes,
+    shots,
     servers,
     hub,
     shutdown,

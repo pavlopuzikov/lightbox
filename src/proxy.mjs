@@ -22,6 +22,7 @@ import http from "node:http";
 import path from "node:path";
 import { routesFor } from "./routes.mjs";
 import { TOKENS, rootCss } from "./design.mjs";
+import { linkShots } from "./shots.mjs";
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -84,6 +85,10 @@ function injectionFor(ctx) {
     name: ctx.project.name,
     hub: ctx.hubUrl,
     inspect: !!ctx.inspectCommentPath,
+    // Capture is only offered where there is somewhere to put the frames and
+    // an inspector to take notes with. Without both, the button would arm a
+    // screen share that produced nothing.
+    shots: !!ctx.shots && !!ctx.inspectCommentPath,
     routes: routesFor(ctx.project),
     reviewed: ctx.progress.get(ctx.project.key),
     // The overlay draws itself in a shadow root under `all: initial`, which
@@ -584,6 +589,10 @@ async function forwardReview(body, ctx) {
       (m, page) =>
         `# Review: ${label} ${page}\n- Project directory: \`${ctx.project.dir}\`\n${where}`
     );
+    // Before the archive, not after. The paths used to be resolved downstream
+    // by the bridge, which meant the uncapped record in inbox.md was the one
+    // copy that never carried them.
+    if (ctx.shots) payload.markdown = linkShots(payload.markdown, ctx.shots.take(ctx.project.key));
   }
 
   /* Submitting a review for a route is the evidence the route was reviewed, so
@@ -685,6 +694,20 @@ export function createProjectServer(ctx) {
           const r = await forwardReview(await readBody(req), ctx);
           res.writeHead(r.status, { "content-type": "application/json" });
           return res.end(r.body);
+        } catch (e) {
+          res.writeHead(400, { "content-type": "application/json" });
+          return res.end(JSON.stringify({ error: e.message }));
+        }
+      }
+      if (p === "/__lb/shot" && req.method === "POST") {
+        // Each frame arrives on its own rather than riding along with the
+        // finished review: bodies stay small, and a sitting that is never
+        // submitted still leaves its images behind.
+        try {
+          const shot = JSON.parse(await readBody(req, 12 * 1024 * 1024));
+          const r = ctx.shots ? ctx.shots.save(project.key, shot) : { file: null, frame: null };
+          res.writeHead(200, { "content-type": "application/json" });
+          return res.end(JSON.stringify(r));
         } catch (e) {
           res.writeHead(400, { "content-type": "application/json" });
           return res.end(JSON.stringify({ error: e.message }));

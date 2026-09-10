@@ -9,6 +9,13 @@ import crypto from "node:crypto";
 import { createProjectServer, upstreamHeaders } from "../src/proxy.mjs";
 import { loopbackOpen, portOpen } from "../src/supervisor.mjs";
 import { Progress } from "../src/progress.mjs";
+import { Shots } from "../src/shots.mjs";
+
+// A 1x1 JPEG, the smallest thing the capture path will actually accept.
+const PIXEL =
+  "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsL" +
+  "DBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAAB" +
+  "AAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -352,6 +359,77 @@ test("a forwarded review is stamped, says where to see it again, and marks the r
     // The query string is dropped; Progress keys on pathname, as the manual
     // Alt+M path in overlay.js already does.
     assert.deepEqual(progress.get(project.key), ["/career"]);
+  } finally {
+    await close();
+    await new Promise((r) => bridge.close(r));
+  }
+});
+
+test("a captured frame is written locally and reaches the review as a path, never as bytes", async () => {
+  const sent = [];
+  const bridge = http.createServer((req, res) => {
+    let b = "";
+    req.on("data", (c) => (b += c));
+    req.on("end", () => {
+      sent.push(b);
+      res.end('{"ok":true}');
+    });
+  });
+  await new Promise((r) => bridge.listen(0, "127.0.0.1", r));
+
+  const archived = [];
+  const store = fs.mkdtempSync(path.join(os.tmpdir(), "lightbox-shotdir-"));
+  const shots = new Shots(store);
+  const { port, project, close } = await serveStaticFixture(
+    { "index.html": PAGE },
+    {
+      shots,
+      bridge: `http://127.0.0.1:${bridge.address().port}`,
+      onReview: (p, payload) => archived.push(payload.markdown),
+    }
+  );
+  try {
+    const shot = await fetch(`http://127.0.0.1:${port}/__lb/shot`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        selector: "a.cta",
+        page: "/career",
+        rect: { x: 12, y: 340, width: 128, height: 44 },
+        viewport: { width: 1536, height: 838 },
+        frame: "f1",
+        dataUrl: PIXEL,
+      }),
+    });
+    const saved = await shot.json();
+    assert.ok(saved.file, "the proxy answers with where it put the frame");
+    assert.ok(fs.existsSync(saved.file), "and the frame is on disk before the review is submitted");
+
+    const res = await fetch(`http://127.0.0.1:${port}/__lb/bridge/review`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        page: "http://localhost:4008/career",
+        markdown:
+          "# Review: /career\n\n## 1. Nav > Cta\n- Selector: `a.cta`\n\n**Comment:** width doesnt match\n",
+      }),
+    });
+    assert.equal(res.status, 200);
+
+    assert.equal(archived.length, 1);
+    assert.ok(
+      archived[0].includes(`- Shot: ${saved.file} · element at 12,340 128x44 · viewport 1536x838`),
+      "the uncapped archive carries the path:\n" + archived[0]
+    );
+    assert.equal(sent.length, 1);
+    assert.equal(
+      sent[0].includes("data:image"),
+      false,
+      "no image bytes go to the bridge: it caps bodies at 4 MB and deletes shot files when it evicts a review"
+    );
+    assert.ok(JSON.parse(sent[0]).markdown.includes(saved.file), "but the path does");
+
+    assert.deepEqual(shots.take(project.key), [], "and the frame is not re-attached to the next review");
   } finally {
     await close();
     await new Promise((r) => bridge.close(r));

@@ -109,6 +109,11 @@ function run({ cfg = {}, path: pathname = "/", search = "", store = {} } = {}) {
   const fetches = [];
   const warnings = [];
 
+  // The inspector's exposed queue tag, which the capture path watches. Tests
+  // that do not arm capture never touch it.
+  const queueTag = { textContent: "[]" };
+  const observers = [];
+
   const document = {
     head,
     body,
@@ -116,15 +121,31 @@ function run({ cfg = {}, path: pathname = "/", search = "", store = {} } = {}) {
     listeners: {},
     createElement(tag) {
       const el = makeEl(tag);
+      if (tag === "canvas") {
+        el.width = 0;
+        el.height = 0;
+        el.getContext = () => ({ drawImage() {} });
+        el.toDataURL = () => "data:image/jpeg;base64,AAAA";
+      }
+      if (tag === "video") {
+        el.play = async () => {};
+        // A real stream reports the captured surface in device pixels. Zero
+        // here means frameOf() correctly refuses to encode an empty canvas.
+        el.videoWidth = 1920;
+        el.videoHeight = 1048;
+      }
       made.push(el);
       return el;
     },
     addEventListener(type, fn) {
       (this.listeners[type] = this.listeners[type] || []).push(fn);
     },
+    getElementById: (id) => (id === "element-review-inspector-queue" ? queueTag : null),
     // Nothing in these tests installs an inspector, and the overlay is expected
     // to cope with that: it is the "no known host attribute" branch.
-    querySelector: () => null,
+    querySelector: () => ({
+      getBoundingClientRect: () => ({ x: 1, y: 2, width: 3, height: 4 }),
+    }),
   };
 
   const location = {
@@ -145,7 +166,14 @@ function run({ cfg = {}, path: pathname = "/", search = "", store = {} } = {}) {
     // `inspect` off: the dynamic import of the inspector is a network fetch and
     // a separate package, and neither belongs in a unit test of the walk.
     __LIGHTBOX: { inspect: false, ...cfg },
+    scrollY: 0,
+    innerWidth: 1536,
+    innerHeight: 838,
   };
+
+  const track = { listeners: {}, stop() {}, addEventListener(t, fn) { this.listeners[t] = fn; } };
+  const stream = { getTracks: () => [track], getVideoTracks: () => [track] };
+  const picker = { calls: 0, deny: false };
 
   const sandbox = {
     window: win,
@@ -155,7 +183,27 @@ function run({ cfg = {}, path: pathname = "/", search = "", store = {} } = {}) {
     console: { warn: (...a) => warnings.push(a.join(" ")) },
     fetch: (url, init) => {
       fetches.push({ url, init });
-      return Promise.resolve({ ok: true });
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ file: "C:/shots/frame-" + fetches.length + ".jpg" }),
+      });
+    },
+    navigator: {
+      mediaDevices: {
+        getDisplayMedia: async () => {
+          picker.calls++;
+          if (picker.deny) throw new Error("NotAllowedError");
+          return stream;
+        },
+      },
+    },
+    MutationObserver: class {
+      constructor(fn) {
+        this.fn = fn;
+        observers.push(this);
+      }
+      observe() {}
+      disconnect() {}
     },
     JSON,
     Set,
@@ -176,7 +224,27 @@ function run({ cfg = {}, path: pathname = "/", search = "", store = {} } = {}) {
   const all = walk(host);
   const byClass = (c) => all.filter((e) => e.className.split(" ").includes(c));
 
-  return { host, all, byClass, made, fetches, warnings, location, storage, document };
+  /** Put a queue on the page and tell the observer it changed, as the inspector does. */
+  const setQueue = (selectors) => {
+    queueTag.textContent = JSON.stringify(selectors.map((s) => ({ descriptor: { selector: s } })));
+    observers.forEach((o) => o.fn());
+  };
+
+  return {
+    host,
+    all,
+    byClass,
+    made,
+    fetches,
+    warnings,
+    location,
+    storage,
+    document,
+    setQueue,
+    picker,
+    track,
+    win,
+  };
 }
 
 const ROUTES = [
@@ -333,6 +401,139 @@ test("marking twice unmarks, and the second tick says so", () => {
   mark.fire("click");
   assert.deepEqual(JSON.parse(o.fetches[1].init.body), { route: "/", reviewed: false });
   assert.equal(mark.textContent, "mark done");
+});
+
+/* ------------------------------------------------------------------ *
+ * Capture
+ * ------------------------------------------------------------------ */
+
+const CAP = { key: "arios", routes: ROUTES, shots: true };
+const armed = (o) => o.byClass("shots")[0];
+const tick = () => new Promise((r) => setImmediate(r));
+
+test("the shots button is hidden unless the server offers somewhere to put frames", () => {
+  assert.equal(run({ cfg: { key: "arios", routes: ROUTES } }).byClass("shots")[0].hidden, true);
+  assert.equal(run({ cfg: CAP }).byClass("shots")[0].hidden, false);
+});
+
+test("arming asks once, then every new note captures itself", async () => {
+  const o = run({ cfg: CAP });
+  armed(o).fire("click");
+  await tick();
+
+  assert.equal(o.picker.calls, 1, "one consent");
+  assert.equal(armed(o).classList.contains("on"), true);
+  assert.equal(armed(o).textContent, "shots on");
+
+  o.setQueue(["h1"]);
+  await tick();
+  const posts = o.fetches.filter((f) => f.url === "/__lb/shot");
+  assert.equal(posts.length, 1, "and no second prompt");
+
+  const body = JSON.parse(posts[0].init.body);
+  assert.equal(body.selector, "h1");
+  assert.deepEqual(body.rect, { x: 1, y: 2, width: 3, height: 4 }, "the element is coordinates");
+  assert.deepEqual(body.viewport, { width: 1536, height: 838 }, "the image is the whole viewport");
+  assert.ok(body.dataUrl.startsWith("data:image/jpeg"), "JPEG: nine PNGs would breach the body caps");
+});
+
+test("notes already queued when you arm are not captured with today's screen", async () => {
+  const o = run({ cfg: CAP });
+  // The inspector restores its queue from sessionStorage on load, so a page
+  // reload mid-review starts with notes already on the page.
+  o.setQueue(["h1", "nav > span"]);
+  armed(o).fire("click");
+  await tick();
+  assert.equal(o.fetches.filter((f) => f.url === "/__lb/shot").length, 0);
+
+  o.setQueue(["h1", "nav > span", "footer"]);
+  await tick();
+  const posts = o.fetches.filter((f) => f.url === "/__lb/shot");
+  assert.equal(posts.length, 1, "only the new one");
+  assert.equal(JSON.parse(posts[0].init.body).selector, "footer");
+});
+
+test("a second note on an unscrolled page references the first frame instead of resending it", async () => {
+  const o = run({ cfg: CAP });
+  armed(o).fire("click");
+  await tick();
+
+  o.setQueue(["h1"]);
+  await tick();
+  o.setQueue(["h1", "nav > span"]);
+  await tick();
+
+  const posts = o.fetches.filter((f) => f.url === "/__lb/shot").map((f) => JSON.parse(f.init.body));
+  assert.equal(posts.length, 2);
+  assert.ok(posts[0].dataUrl, "the first carries the frame");
+  assert.equal(posts[1].dataUrl, undefined, "the second does not");
+  assert.equal(posts[1].ref, posts[0].frame, "it points at the frame already on the server");
+
+  // Scrolling makes it a different screen, so the bytes go again.
+  o.win.scrollY = 900;
+  o.setQueue(["h1", "nav > span", "footer"]);
+  await tick();
+  const third = JSON.parse(o.fetches.filter((f) => f.url === "/__lb/shot")[2].init.body);
+  assert.ok(third.dataUrl, "a different screen is a different frame");
+});
+
+test("deleting a queued note does not make the next one capture twice", async () => {
+  const o = run({ cfg: CAP });
+  armed(o).fire("click");
+  await tick();
+
+  o.setQueue(["h1", "nav > span"]);
+  await tick();
+  o.setQueue(["h1"]);
+  await tick();
+  o.setQueue(["h1", "footer"]);
+  await tick();
+
+  const posts = o.fetches.filter((f) => f.url === "/__lb/shot").map((f) => JSON.parse(f.init.body));
+  assert.deepEqual(posts.map((p) => p.selector), ["h1", "nav > span", "footer"]);
+});
+
+test("dismissing the picker leaves the button off, and nothing is captured", async () => {
+  const o = run({ cfg: CAP });
+  o.picker.deny = true;
+  armed(o).fire("click");
+  await tick();
+
+  assert.equal(armed(o).classList.contains("on"), false, "declining is a decision, not a fault");
+  assert.equal(armed(o).textContent, "shots");
+  o.setQueue(["h1"]);
+  await tick();
+  assert.equal(o.fetches.filter((f) => f.url === "/__lb/shot").length, 0);
+});
+
+test("ending the share from the browser's own bar puts the button back", async () => {
+  const o = run({ cfg: CAP });
+  armed(o).fire("click");
+  await tick();
+  assert.equal(armed(o).classList.contains("on"), true);
+
+  // Without this the button reads "on" over a dead track and every later note
+  // silently gets a black frame.
+  o.track.listeners.ended();
+  assert.equal(armed(o).classList.contains("on"), false);
+
+  o.setQueue(["h1"]);
+  await tick();
+  assert.equal(o.fetches.filter((f) => f.url === "/__lb/shot").length, 0);
+});
+
+test("clicking again disarms, and stops the track rather than leaving it live", async () => {
+  const o = run({ cfg: CAP });
+  let stopped = 0;
+  o.track.stop = () => stopped++;
+
+  armed(o).fire("click");
+  await tick();
+  armed(o).fire("click");
+  await tick();
+
+  assert.equal(stopped, 1, "the browser's sharing indicator must go away");
+  assert.equal(armed(o).classList.contains("on"), false);
 });
 
 test("no design tokens is a warning, not a silently unstyled bar", () => {

@@ -160,6 +160,14 @@
     "button:disabled{color:var(--rule-ink);cursor:default;background:transparent}",
     "button:focus-visible{outline:2px solid var(--vermilion);outline-offset:-3px}",
     ".nav{font-size:var(--t-body);letter-spacing:0;padding:var(--s-4) var(--s-4)}",
+    "button[hidden]{display:none}",
+
+    /* Armed. Vermilion is spent on the gate and on failures, and this is
+       neither, but it is the one control that keeps doing something after you
+       stop looking at it. A filled ink block is the strongest thing this
+       system has that is not red, and it reads as on rather than as wrong. */
+    ".shots.on{background:var(--ink);color:var(--paper)}",
+    ".shots.on:hover{background:var(--ink-2);color:var(--paper)}",
 
     ".label{display:flex;gap:var(--s-4);align-items:center;padding:var(--s-4) var(--s-5);cursor:pointer;",
     "max-width:48vw;border-left:1px solid var(--rule-ink)}",
@@ -269,6 +277,13 @@
   mark.type = "button";
   mark.title = "Mark this page reviewed (Alt+M)";
 
+  var shots = document.createElement("button");
+  shots.type = "button";
+  shots.className = "shots";
+  shots.textContent = "shots";
+  shots.title = "Screenshot every note from here on";
+  if (!CFG.shots) shots.hidden = true;
+
   var hub = document.createElement("button");
   hub.type = "button";
   hub.textContent = "hub";
@@ -285,6 +300,7 @@
   bar.appendChild(label);
   bar.appendChild(next);
   bar.appendChild(mark);
+  bar.appendChild(shots);
   bar.appendChild(hub);
   root.appendChild(gate);
   root.appendChild(bar);
@@ -470,7 +486,10 @@
     f.className = "foot";
     f.innerHTML =
       "<kbd>Alt</kbd>+<kbd>[</kbd> / <kbd>]</kbd> walk &nbsp; <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>[</kbd> / <kbd>]</kbd> next family<br>" +
-      "<kbd>Alt</kbd>+<kbd>M</kbd> mark done &nbsp; <kbd>Alt</kbd>+<kbd>H</kbd> hub &nbsp; <kbd>Alt</kbd>+<kbd>C</kbd> inspect and comment";
+      "<kbd>Alt</kbd>+<kbd>M</kbd> mark done &nbsp; <kbd>Alt</kbd>+<kbd>H</kbd> hub &nbsp; <kbd>Alt</kbd>+<kbd>C</kbd> inspect and comment" +
+      (CFG.shots
+        ? "<br>shots: consent once, then every note you add is captured with the screen you added it on"
+        : "");
     sheet.appendChild(f);
   }
 
@@ -497,6 +516,186 @@
     } catch (e) {
       /* the count is a convenience; losing one is not worth an error dialog */
     }
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Capture
+   *
+   * Twenty-four reviews were taken before this existed and not one carried an
+   * image, because the inspector's own Shot button asks for a click per note
+   * and the first click raises a screen-share picker. Two frictions stacked on
+   * the one action that shows the reviewer nothing back.
+   *
+   * So: consent once, then every note captures itself. The frame is the whole
+   * viewport rather than a crop of the element, because half the notes in a
+   * real review are comparative and a tight crop of one nav link cannot answer
+   * "width doesnt match the other links". The element's rectangle is recorded
+   * as coordinates instead of drawn into the pixels.
+   *
+   * The stream dies on navigation, so this is armed per page rather than per
+   * session. That is a property of running inside the document being reviewed,
+   * not a choice.
+   * ---------------------------------------------------------------- */
+
+  var QUEUE_TAG = "element-review-inspector-queue";
+  var cap = { on: false, stream: null, video: null, seen: 0, frames: {} };
+
+  function disarm(why) {
+    if (cap.stream) {
+      var tracks = cap.stream.getTracks();
+      for (var i = 0; i < tracks.length; i++) tracks[i].stop();
+    }
+    cap.stream = null;
+    cap.video = null;
+    cap.on = false;
+    shots.classList.remove("on");
+    shots.textContent = "shots";
+    shots.title = why || "Screenshot every note from here on";
+  }
+
+  function queueNow() {
+    var tag = document.getElementById(QUEUE_TAG);
+    if (!tag) return [];
+    try {
+      return JSON.parse(tag.textContent) || [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async function arm() {
+    if (cap.on) return disarm();
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+      shots.title = "This browser cannot capture the screen";
+      shots.disabled = true;
+      return;
+    }
+    try {
+      cap.stream = await navigator.mediaDevices.getDisplayMedia({
+        // preferCurrentTab puts this tab at the top of the picker. It is a
+        // request, not a guarantee, and the reviewer can still pick a window;
+        // the frames are then of that window, which is their choice to make.
+        video: { displaySurface: "browser" },
+        preferCurrentTab: true,
+        selfBrowserSurface: "include",
+        surfaceSwitching: "exclude",
+        audio: false,
+      });
+    } catch (e) {
+      // Dismissing the picker is a decision, not a fault. Say nothing.
+      return disarm();
+    }
+
+    var v = document.createElement("video");
+    v.srcObject = cap.stream;
+    v.muted = true;
+    v.playsInline = true;
+    try {
+      await v.play();
+    } catch (e) {
+      return disarm("The capture stream would not start");
+    }
+    cap.video = v;
+    cap.on = true;
+    // Anything already queued was noted before arming, or restored from
+    // sessionStorage on this page load. Capturing those now would attach
+    // today's screen to yesterday's note.
+    cap.seen = queueNow().length;
+    shots.classList.add("on");
+    shots.textContent = "shots on";
+    shots.title = "Stop screenshotting notes";
+
+    // Ending the share from the browser's own bar has to put the button back,
+    // or it says "on" over a dead track and every later note silently gets a
+    // black frame.
+    var t = cap.stream.getVideoTracks()[0];
+    if (t) t.addEventListener("ended", function () { disarm(); });
+  }
+
+  function frameOf(el) {
+    var v = cap.video;
+    var c = document.createElement("canvas");
+    c.width = v.videoWidth;
+    c.height = v.videoHeight;
+    var ctx2d = c.getContext("2d");
+    if (!ctx2d || !c.width || !c.height) return null;
+    ctx2d.drawImage(v, 0, 0, c.width, c.height);
+    // JPEG, not PNG. A full-width PNG of a real page runs past a megabyte, and
+    // nine of them in one sitting breach both this proxy's body limit and the
+    // bridge's. At 0.9 the same frame is a fifth of that and no less readable.
+    var url = c.toDataURL("image/jpeg", 0.9);
+    var r = el ? el.getBoundingClientRect() : null;
+    return {
+      dataUrl: url,
+      rect: r ? { x: r.x, y: r.y, width: r.width, height: r.height } : null,
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      // Nine notes taken without scrolling are one screen. The length of the
+      // encoded frame is a cheap stand-in for its content: two captures of a
+      // still page agree, and a scroll of one pixel does not.
+      frame: [location.pathname, window.scrollY, window.innerWidth, url.length].join("|"),
+    };
+  }
+
+  async function capture(entry) {
+    var sel = entry && entry.descriptor && entry.descriptor.selector;
+    var el = null;
+    try {
+      el = sel ? document.querySelector(sel) : null;
+    } catch (e) {
+      /* a selector this document cannot parse still gets a frame, just no box */
+    }
+    var f = frameOf(el);
+    if (!f) return;
+
+    var body = {
+      selector: sel || null,
+      page: location.pathname + location.search,
+      rect: f.rect,
+      viewport: f.viewport,
+      frame: f.frame,
+    };
+    // A frame already on the server is referenced, not resent. This is what
+    // keeps a nine-note pass over one screen down to a single file.
+    if (cap.frames[f.frame]) body.ref = f.frame;
+    else body.dataUrl = f.dataUrl;
+
+    try {
+      var res = await fetch("/__lb/shot", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      var out = await res.json();
+      if (out && out.file) cap.frames[f.frame] = out.file;
+    } catch (e) {
+      /* the note is still queued and the review still submits; it just goes
+         without its picture, which is what every review did before this */
+    }
+  }
+
+  if (CFG.shots) {
+    shots.addEventListener("click", function () {
+      arm();
+    });
+    // The inspector rewrites this tag's text on every queue change, so one
+    // observer on the document catches a note added anywhere.
+    var watch = new MutationObserver(function () {
+      if (!cap.on) return;
+      var q = queueNow();
+      if (q.length <= cap.seen) {
+        // Deleting a queued note must not make the next one capture twice.
+        cap.seen = q.length;
+        return;
+      }
+      var fresh = q.slice(cap.seen);
+      cap.seen = q.length;
+      for (var i = 0; i < fresh.length; i++) capture(fresh[i]);
+    });
+    watch.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
   }
 
   prev.addEventListener("click", function () {
