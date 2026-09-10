@@ -42,6 +42,59 @@ there before and after.
   unreachable. The intended index is now carried across the navigation, and the
   bar says `/about → /` in vermilion when a route did not serve itself.
 
+### A dependency renamed itself and the inspector went dark in 45 review ports
+
+The element inspector was published as `inspect-comment` and became
+`element-review-inspector` at 3.0.0. Three separate names moved with it: the
+package directory, the entry file `src/inspect-comment.js`, and the host
+attribute `data-inspect-comment` that its dock mounts under. lightbox hardcoded
+all three, in three different files, so the button that starts a selection was
+simply gone from every project. It was reported as a login problem on AriOS,
+which is a fair reading: the bar was there, the walk worked, and the one thing
+missing was the thing you had signed in to use.
+
+It failed silently by construction. The proxy sets `inspect: !!inspectCommentPath`,
+so a null path meant the overlay never attempted the import, and an import that
+is never attempted logs nothing. The one signal was a startup warning that told
+the reader to run `npm i -D inspect-comment`, which was the wrong advice: the
+package was installed, and reinstalling under the old name would have been the
+only way to make that advice true.
+
+- **`auto` now searches both names crossed against both entry filenames.** Not
+  as pairs. The two halves were renamed independently, and the machine this was
+  found on had the awkward combination: a clone still in a directory called
+  `inspect-comment` holding the new `src/element-review-inspector.js`. Pairing
+  them is how `auto` came back empty with the file sitting right there.
+- **An explicit path that has gone stale is repaired rather than rejected.** The
+  entry file under its old name next to the new one, and the package root instead
+  of the entry, are both resolved. A directory is checked with `statSync().isFile()`,
+  because a directory passes `existsSync` and then fails to be read.
+- **The warning names the path it could not find**, and points at the current
+  filename. "missing" sent the last reader to reinstall a package that was
+  already installed.
+- **The overlay queries the new host attribute first, then the old one.** This is
+  not cosmetic. The z-index lift the overlay puts on that host IS the fix for the
+  inspector’s own stacking bug, recorded higher up this file, so a stale selector
+  leaves the dock painted in its own near-black pill, on a dark page, underneath
+  the content. Undressed and absent look the same.
+- **The bridge health check accepted only the old MCP server name**, so it could
+  never pass. The hub called a live bridge dead on every start, and when the port
+  was already held it said "held by something that is not inspect-comment;
+  reviews cannot land". Reviews were landing. Both names are accepted now, and it
+  still checks the name rather than `ok` alone, because that second message
+  exists to catch an unrelated server on :7391.
+
+Four tests in `test/catalogue.test.mjs` are the alarm for the next rename, and
+each was proved by reintroducing the real defect and reading the failure. The
+first version of the host-attribute guard was worthless: it searched the whole
+of `overlay.js` for the attribute, and the comment above the code names both
+names, so it passed with the live selector reverted. It matches the
+`querySelector` call now.
+
+Measured on AriOS through :4008, signed out on `/login` and signed in on `/`:
+host present, dressed by lightbox, dock 181x31 opaque on cream, and
+`elementFromPoint` at the dock’s own centre returns the host rather than the
+page underneath it.
 ### An unfilled dynamic route is not a page
 
 `/work/[slug]` is a literal request. A dev server answers it by compiling for

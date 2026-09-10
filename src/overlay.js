@@ -619,15 +619,31 @@
     return true;
   }
 
+  /* The inspector's host attribute, newest name first. It is
+     [data-element-review-inspector] since 3.0.0 and was [data-inspect-comment]
+     before it, and lightbox has to dress whichever one is actually installed.
+
+     Querying only the old name does more than leave the dock undressed. The
+     z-index lift dressDock puts on the host IS the fix for inspect-comment's own
+     stacking bug, so a stale selector here leaves the dock drawn in its own
+     near-black pill, on a dark site, buried under the page. Undressed and
+     invisible are the same outcome. */
+  function inspectorHost() {
+    return (
+      document.querySelector("[data-element-review-inspector]") ||
+      document.querySelector("[data-inspect-comment]")
+    );
+  }
+
   if (CFG.inspect) {
     import("/__lb/inspect-comment.js")
       .then(function (m) {
         m.mount({ bridge: location.origin + "/__lb/bridge" });
-        if (!dressDock(document.querySelector("[data-inspect-comment]")))
-          console.warn("[lightbox] inspect-comment mounted but its dock could not be restyled");
+        if (!dressDock(inspectorHost()))
+          console.warn("[lightbox] the element inspector mounted but its dock could not be restyled: no known host attribute on the page");
       })
       .catch(function (err) {
-        console.warn("[lightbox] inspect-comment did not load:", err && err.message);
+        console.warn("[lightbox] the element inspector did not load:", err && err.message);
       });
   }
 })();

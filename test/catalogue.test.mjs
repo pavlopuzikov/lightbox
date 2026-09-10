@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { buildCatalogue } from "../src/catalogue.mjs";
+import { buildCatalogue, inspectCommentSearch } from "../src/catalogue.mjs";
 
 function fixture(files) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "lightbox-catalogue-"));
@@ -75,4 +75,84 @@ test("a configured directory that is not on disk is reported, not dropped", () =
   });
   assert.equal(projects.length, 1);
   assert.equal(projects[0].exists, false);
+});
+
+/* The element inspector shipped under two names, and the two parts were renamed
+   independently: the package became `element-review-inspector` and its entry
+   file became `src/element-review-inspector.js`, but a clone made before that
+   still sits in a directory called `inspect-comment`. On 2026-09-10 the stale
+   name switched the inspector off in every review port, silently, because the
+   proxy sets `inspect: !!inspectCommentPath` and the overlay then never even
+   attempts the import. These tests are the alarm for the next rename. */
+
+function pkg(dirName, entryFile) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lightbox-inspector-"));
+  const dir = path.join(root, dirName);
+  fs.mkdirSync(path.join(dir, "src"), { recursive: true });
+  fs.writeFileSync(path.join(dir, "src", entryFile), "export function mount() {}");
+  return { cwd: path.join(root, "tool"), dir, entry: path.join(dir, "src", entryFile) };
+}
+
+test("auto finds the inspector under either directory name and either entry name", () => {
+  // Every combination, because the two names moved independently and the real
+  // machine is the awkward one: old directory, new entry file.
+  for (const dirName of ["element-review-inspector", "inspect-comment"]) {
+    for (const entryFile of ["element-review-inspector.js", "inspect-comment.js"]) {
+      const { cwd, entry } = pkg(dirName, entryFile);
+      fs.mkdirSync(cwd, { recursive: true });
+      const found = inspectCommentSearch({ inspectComment: "auto" }, cwd);
+      assert.equal(found.path, entry, `${dirName}/src/${entryFile}`);
+      assert.equal(found.problem, null);
+    }
+  }
+});
+
+test("an explicit path survives the entry file being renamed under it", () => {
+  const { dir, entry } = pkg("inspect-comment", "element-review-inspector.js");
+  // What the config actually held: the old filename, which no longer exists.
+  const stale = path.join(dir, "src", "inspect-comment.js");
+  const found = inspectCommentSearch({ inspectComment: stale });
+  assert.equal(found.path, entry, "the sibling entry file is the obvious answer to a rename");
+  // And the package root, which is what you get from copying a path out of a
+  // file manager. A directory passes existsSync and then fails to be read.
+  assert.equal(inspectCommentSearch({ inspectComment: dir }).path, entry);
+});
+
+test("a path that resolves to nothing says which path, not just \"missing\"", () => {
+  const junk = path.join(os.tmpdir(), "lightbox-no-inspector-here", "nope.js");
+  const found = inspectCommentSearch({ inspectComment: junk });
+  assert.equal(found.path, null);
+  assert.match(found.problem, /does not exist/);
+  assert.ok(found.problem.includes(junk), "name the path so a typo is visible");
+});
+
+test("the overlay dresses the dock under the host attribute the inspector uses", () => {
+  // dressDock's z-index lift IS the fix for the inspector's own stacking bug, so
+  // a selector that matches nothing does not merely leave the dock unstyled: it
+  // leaves it buried under a dark page, which is indistinguishable from absent.
+  const overlay = fs.readFileSync(new URL("../src/overlay.js", import.meta.url), "utf8");
+  // Match the querySelector call, not the file. The comment above that code
+  // names both attributes, so a substring check on the file passes even with
+  // the live selector reverted to the old name only.
+  const queried = [...overlay.matchAll(/querySelector\("\[(data-[a-z-]+)\]"\)/g)].map((m) => m[1]);
+  for (const attr of ["data-element-review-inspector", "data-inspect-comment"]) {
+    assert.ok(queried.includes(attr), `overlay.js does not querySelector [${attr}]: ${queried.join(", ")}`);
+  }
+});
+
+test("the bridge health check accepts both names the MCP server has reported", () => {
+  // The rename reached three files, and this was the quiet one: the check could
+  // not pass at all, so the hub called a working bridge dead on every start, and
+  // called it a foreign process squatting the port whenever the port was already
+  // held. Reviews were landing the whole time. Matching on the name rather than
+  // on `ok` alone is deliberate, because that second message exists precisely to
+  // catch an unrelated server holding :7391.
+  const index = fs.readFileSync(new URL("../src/index.mjs", import.meta.url), "utf8");
+  const from = index.indexOf("function bridgeHealthy");
+  assert.notEqual(from, -1, "bridgeHealthy was renamed; this guard needs updating");
+  const body = index.slice(from, index.indexOf("\nasync function", from));
+  const accepted = [...body.matchAll(/"([a-z-]+-mcp)"/g)].map((m) => m[1]);
+  for (const name of ["element-review-inspector-mcp", "inspect-comment-mcp"]) {
+    assert.ok(accepted.includes(name), `bridgeHealthy does not accept "${name}": ${accepted.join(", ")}`);
+  }
 });

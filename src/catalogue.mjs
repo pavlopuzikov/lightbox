@@ -261,23 +261,81 @@ export function buildCatalogue(config) {
   return { projects: list, groups };
 }
 
+/* The inspector has been published under two names, and the two parts renamed
+   independently. It is the package `element-review-inspector` now with entry
+   `src/element-review-inspector.js`; it was `inspect-comment` with
+   `src/inspect-comment.js` before. A sibling clone keeps whatever the directory
+   was called when it was cloned, which is very often still `inspect-comment`
+   holding the NEW filename, so the name and the entry have to be searched as a
+   cross product rather than as pairs. Getting that wrong is how "auto" found
+   nothing on a machine where the file was sitting right there.
+
+   The rename switched the element inspector off in forty review ports on
+   2026-09-10, and did it in total silence: the proxy sets
+   `inspect: !!ctx.inspectCommentPath`, so the overlay never attempted the
+   import and never logged. The bar appeared, the walk worked, and the only
+   symptom was that the button which starts a selection was gone. */
+const DIR_NAMES = ["element-review-inspector", "inspect-comment"];
+const ENTRY_FILES = ["element-review-inspector.js", "inspect-comment.js"];
+
+/** An existing FILE. A directory passes existsSync and then fails to be read. */
+function isFile(p) {
+  try {
+    return fs.statSync(p).isFile();
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Where to read inspect-comment from. "auto" checks, in order: a local
+ * Where to read the element inspector from. "auto" checks, for every name the
+ * package has shipped under and every name its entry file has had: a local
  * node_modules install, a sibling clone, then the tool's own parent directory.
+ *
  * Returns null when it cannot be found, which is a warning and not a failure:
- * lightbox still serves every page, just without the overlay.
+ * lightbox still serves every page, just without the inspector.
  */
 export function resolveInspectComment(config, cwd = process.cwd()) {
+  return inspectCommentSearch(config, cwd).path;
+}
+
+/**
+ * resolveInspectComment, with the reason it failed in `problem`, so the caller
+ * can say something more useful than "missing". An explicit path that does not
+ * exist is a typo or a rename, and naming the path beats telling the reader to
+ * reinstall a package that is already installed.
+ */
+export function inspectCommentSearch(config, cwd = process.cwd()) {
   const explicit = config.inspectComment;
   if (explicit && explicit !== "auto") {
-    return fs.existsSync(explicit) ? explicit : null;
+    if (isFile(explicit)) return { path: explicit, problem: null };
+    // Two near misses worth resolving rather than rejecting, because both are
+    // what you get from copying a path out of a file manager or a stale doc:
+    // the package root instead of the entry, and the entry under its old name.
+    for (const f of ENTRY_FILES) {
+      const inside = path.join(explicit, "src", f);
+      if (isFile(inside)) return { path: inside, problem: null };
+      const beside = path.join(path.dirname(explicit), f);
+      if (isFile(beside)) return { path: beside, problem: null };
+    }
+    return {
+      path: null,
+      problem: `the configured inspectComment path does not exist: ${explicit}`,
+    };
   }
-  const rel = ["src", "inspect-comment.js"];
-  const candidates = [
-    path.join(cwd, "node_modules", "inspect-comment", ...rel),
-    path.join(cwd, "..", "inspect-comment", ...rel),
-    path.join(cwd, "..", "..", "inspect-comment", ...rel),
-  ];
-  for (const c of candidates) if (fs.existsSync(c)) return c;
-  return null;
+  const tried = [];
+  for (const dir of DIR_NAMES) {
+    for (const base of [
+      path.join(cwd, "node_modules", dir),
+      path.join(cwd, "..", dir),
+      path.join(cwd, "..", "..", dir),
+    ]) {
+      for (const f of ENTRY_FILES) {
+        const c = path.join(base, "src", f);
+        tried.push(c);
+        if (isFile(c)) return { path: c, problem: null };
+      }
+    }
+  }
+  return { path: null, problem: `not found in any of ${tried.length} locations` };
 }

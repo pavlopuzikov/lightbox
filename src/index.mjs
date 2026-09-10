@@ -8,7 +8,7 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildCatalogue, resolveInspectComment } from "./catalogue.mjs";
+import { buildCatalogue, inspectCommentSearch } from "./catalogue.mjs";
 import { createHubServer } from "./hub.mjs";
 import { Handover } from "./handover.mjs";
 import { Progress } from "./progress.mjs";
@@ -55,7 +55,17 @@ function bridgeHealthy(bridge, timeout = 800) {
       res.on("data", (c) => (body += c));
       res.on("end", () => {
         try {
-          resolve(JSON.parse(body).name === "inspect-comment-mcp");
+          // Both names the MCP server has reported. It calls itself
+          // element-review-inspector-mcp since the 3.0.0 rename and
+          // inspect-comment-mcp before it. Pinning the old one made this
+          // check unpassable, and the two things it then said were both false and
+          // both alarming: "did not come up" on a bridge that was answering
+          // {"ok":true}, or, when the port was already held, "held by something
+          // that is not inspect-comment; reviews cannot land". Reviews landed
+          // fine. Checking `ok` alone would pass for any JSON server that
+          // happens to hold the port, which is the case that message exists for.
+          const name = JSON.parse(body).name;
+          resolve(name === "element-review-inspector-mcp" || name === "inspect-comment-mcp");
         } catch {
           resolve(false);
         }
@@ -177,15 +187,21 @@ export async function serve(config, cwd = process.cwd(), opts = {}) {
   supervisor.watchHealth();
   const progress = new Progress(path.join(stateDir, "progress.json"));
   const handover = new Handover(path.join(stateDir, "handover.json"));
-  const inspectCommentPath = resolveInspectComment(config, cwd);
+  const inspectSearch = inspectCommentSearch(config, cwd);
+  const inspectCommentPath = inspectSearch.path;
   const hubUrl = `http://localhost:${config.hubPort}/`;
   const overlayPath = path.join(HERE, "overlay.js");
 
   if (!inspectCommentPath) {
+    // Say which of the two failures this is. "missing" sent the last reader to
+    // reinstall a package that was installed and had simply been renamed, and the
+    // button that starts a selection stayed gone for a day.
     log(
-      "warn    inspect-comment was not found, so pages will carry the route walker but no\n" +
-        "        element inspector. Fix with `npm i -D inspect-comment`, or set\n" +
-        "        `inspectComment` in the config to the path of its src/inspect-comment.js."
+      `warn    no element inspector: ${inspectSearch.problem}.\n` +
+        "        Pages carry the route walker but nothing to select an element with.\n" +
+        "        Fix by pointing `inspectComment` in the config at the package's\n" +
+        "        src/element-review-inspector.js (it was src/inspect-comment.js before\n" +
+        "        the 3.0.0 rename), or set it to auto and let both names be searched."
     );
   }
 
