@@ -7,7 +7,7 @@
 Every front end you have ever built, running at once, each page carrying the
 same review overlay. Open the hub, walk a project's routes one at a time, mark
 what you have seen, and comment on elements with
-[inspect-comment](https://github.com/pavlopuzikov/inspect-comment). The notes
+[element-review-inspector](https://github.com/pavlopuzikov/element-review-inspector). The notes
 land in a folder a coding agent can read, tagged with the repository they came
 from.
 
